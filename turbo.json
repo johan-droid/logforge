@@ -1,0 +1,62 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "ui": "tui",
+  "globalEnv": [
+    "DATABASE_URL",
+    "ENCRYPTION_KEY",
+    "JWT_SECRET",
+    "PORT",
+    "NODE_ENV",
+    "WEB_BASE_URL",
+    "API_BASE_URL",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "RENDER_CLIENT_ID",
+    "RENDER_CLIENT_SECRET",
+    "RENDER_AUTH_URL",
+    "RENDER_TOKEN_URL",
+    "RENDER_SCOPES",
+    "RENDER_OWNER_ID",
+    "VERCEL_CLIENT_ID",
+    "VERCEL_CLIENT_SECRET",
+    "VERCEL_AUTH_URL",
+    "VERCEL_TOKEN_URL",
+    "VERCEL_SCOPES",
+    "HEROKU_CLIENT_ID",
+    "HEROKU_CLIENT_SECRET",
+    "HEROKU_AUTH_URL",
+    "HEROKU_TOKEN_URL",
+    "HEROKU_SCOPES",
+    "CLOUDFLARE_ACCOUNT_ID",
+    "CLOUDFLARE_CLIENT_ID",
+    "CLOUDFLARE_CLIENT_SECRET",
+    "CLOUDFLARE_AUTH_URL",
+    "CLOUDFLARE_TOKEN_URL",
+    "CLOUDFLARE_SCOPES",
+    "RAILWAY_CLIENT_ID",
+    "RAILWAY_CLIENT_SECRET",
+    "RAILWAY_AUTH_URL",
+    "RAILWAY_TOKEN_URL",
+    "RAILWAY_SCOPES"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "check-types": {
+      "dependsOn": ["^check-types"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

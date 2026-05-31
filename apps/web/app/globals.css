@@ -1,0 +1,178 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 42 24% 96%;
+    --foreground: 164 24% 9%;
+    --card: 42 18% 99%;
+    --card-foreground: 164 24% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 156 68% 36%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 156 68% 36%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 164 32% 5%;
+    --foreground: 42 32% 94%;
+    --card: 164 20% 8%;
+    --card-foreground: 42 32% 94%;
+    --popover: 164 20% 8%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 158 72% 45%;
+    --primary-foreground: 164 32% 5%;
+    --secondary: 188 18% 16%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 184 15% 15%;
+    --muted-foreground: 42 16% 68%;
+    --accent: 32 22% 18%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 164 13% 20%;
+    --input: 164 13% 20%;
+    --ring: 158 72% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background: linear-gradient(
+      135deg,
+      hsl(164 32% 5%) 0%,
+      hsl(184 24% 7%) 48%,
+      hsl(32 26% 7%) 100%
+    );
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(hsl(42 32% 94% / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(42 32% 94% / 0.035) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: linear-gradient(to bottom, black, transparent 80%);
+  }
+}
+
+@layer utilities {
+  @keyframes buttery-fade-up {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 16px, 0) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+  }
+
+  @keyframes buttery-float {
+    0% {
+      transform: translate3d(0, 0, 0);
+    }
+    50% {
+      transform: translate3d(0, -8px, 0);
+    }
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes logline-enter {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 6px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  .buttery-fade-up {
+    animation: buttery-fade-up 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .buttery-float {
+    animation: buttery-float 5s ease-in-out infinite;
+  }
+
+  .glass-panel {
+    backdrop-filter: blur(14px) saturate(120%);
+    background: linear-gradient(
+      140deg,
+      hsl(164 24% 12% / 0.56),
+      hsl(184 26% 10% / 0.4)
+    );
+    box-shadow:
+      inset 0 1px 0 hsl(42 32% 94% / 0.08),
+      0 20px 40px hsl(164 70% 2% / 0.4);
+  }
+
+  .log-surface {
+    background:
+      radial-gradient(
+        1100px 400px at 15% -20%,
+        hsl(160 90% 45% / 0.12),
+        transparent 60%
+      ),
+      linear-gradient(180deg, hsl(164 25% 8% / 0.86), hsl(164 25% 6% / 0.94));
+  }
+
+  .logline-enter {
+    animation: logline-enter 220ms ease-out both;
+  }
+
+  .smooth-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(160 30% 60% / 0.45) transparent;
+  }
+
+  .smooth-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .smooth-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .smooth-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: linear-gradient(
+      180deg,
+      hsl(160 50% 70% / 0.35),
+      hsl(180 40% 60% / 0.2)
+    );
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+}

@@ -1,0 +1,7 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+overrides:
+  postcss: "^8.5.15"
+  "next>postcss": "^8.5.15"
+  "next@16.2.6>postcss": "^8.5.15"
