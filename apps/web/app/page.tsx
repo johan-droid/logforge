@@ -168,7 +168,7 @@ export default function Landing() {
                 sign in and connect providers to load actual service data
               </div>
               <div className="mt-1 text-amber-100">
-                sse gateway ready on /api/stream/:provider/:serviceId
+                socket.io live logs ready for connected services
               </div>
             </div>
           </div>

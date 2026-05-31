@@ -8,11 +8,13 @@ import credentialRoutes from "./routes/credentials.js";
 import dataRoutes from "./routes/data.js";
 import providerRoutes from "./routes/providers.js";
 import { sseManager } from "./sse/SSEManager.js";
+import { SocketLogManager } from "./socket/SocketLogManager.js";
 import { startLogCleanupJob } from "./polling/LogCleanupJob.js";
 import { serviceSyncCoordinator } from "./polling/ServiceSync.js";
 import { requireSession } from "./auth/session.js";
 import { assertEncryptionConfig } from "./crypto/index.js";
 import { normalizeProvider } from "./providers/registry.js";
+import { Server } from "socket.io";
 
 function loadEnvFile(filename: string) {
   const envPath = path.resolve(process.cwd(), filename);
@@ -68,6 +70,15 @@ fastify.register(authRoutes, { prefix: "/api/auth" });
 fastify.register(credentialRoutes, { prefix: "/api/credentials" });
 fastify.register(dataRoutes, { prefix: "/api" });
 fastify.register(providerRoutes, { prefix: "/api/providers" });
+
+const socketIo = new Server(fastify.server, {
+  cors: {
+    origin: process.env.WEB_BASE_URL || "http://localhost:3000",
+    credentials: true,
+  },
+});
+
+new SocketLogManager(socketIo, fastify);
 
 fastify.get("/api/stream/:provider/:serviceId", async (request, reply) => {
   const { provider, serviceId } = request.params as {

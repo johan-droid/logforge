@@ -17,6 +17,7 @@ import { Input } from "./ui/input";
 import type { ProviderType, LogEvent } from "@repo/shared";
 import { API_BASE } from "@/lib/config";
 import { cn } from "@/lib/utils";
+import { io, type Socket } from "socket.io-client";
 
 const EMPTY_LOGS: LogEvent[] = [];
 
@@ -78,62 +79,64 @@ export default function LogViewer({
       return;
     }
 
-    let es: EventSource | null = null;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    let reconnectDelay = 1000;
+    let socket: Socket | null = null;
     let closed = false;
 
     function connect() {
       if (closed) return;
 
-      try {
-        setConnectionState("connecting");
-        es = new EventSource(
-          `${API_BASE}/api/stream/${provider}/${serviceId}`,
-          { withCredentials: true },
-        );
-        es.onopen = () => {
-          reconnectDelay = 1000;
-          setConnectionState("live");
-        };
-        es.onmessage = (ev) => {
-          try {
-            const data = JSON.parse(ev.data);
-            if (Array.isArray(data)) {
-              addLogs(serviceId, data);
+      setConnectionState("connecting");
+      socket = io(API_BASE, {
+        withCredentials: true,
+        transports: ["websocket", "polling"],
+        autoConnect: false,
+      });
+
+      socket.on("connect", () => {
+        setConnectionState("live");
+        socket?.emit(
+          "subscribe",
+          { provider, serviceId },
+          (response: { ok: boolean; error?: string }) => {
+            if (!response.ok && response.error) {
+              setConnectionState("retrying");
             }
-          } catch {
-            // ignore malformed messages
-          }
-        };
-        es.onerror = () => {
-          if (closed) return;
-          if (es) {
-            es.close();
-            es = null;
-          }
+          },
+        );
+      });
+
+      socket.on("ready", () => {
+        setConnectionState("live");
+      });
+
+      socket.on("log", (data: LogEvent[]) => {
+        if (Array.isArray(data)) {
+          addLogs(serviceId, data);
+        }
+      });
+
+      socket.on("disconnect", () => {
+        if (!closed) {
           setConnectionState("retrying");
-          retryTimer = setTimeout(() => {
-            reconnectDelay = Math.min(30000, reconnectDelay * 1.5);
-            connect();
-          }, reconnectDelay);
-        };
-      } catch {
-        // ignore connect errors and retry
-        setConnectionState("retrying");
-        retryTimer = setTimeout(connect, reconnectDelay);
-      }
+        }
+      });
+
+      socket.on("connect_error", () => {
+        if (!closed) {
+          setConnectionState("retrying");
+        }
+      });
+
+      socket.connect();
     }
 
     connect();
 
     return () => {
       closed = true;
-      if (retryTimer) {
-        clearTimeout(retryTimer);
-      }
-      if (es) {
-        es.close();
+      if (socket) {
+        socket.emit("unsubscribe", { provider, serviceId });
+        socket.disconnect();
       }
     };
   }, [serviceId, provider, addLogs, paused]);

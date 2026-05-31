@@ -56,6 +56,29 @@ export function readCookie(request: FastifyRequest, name: string) {
   return decodeURIComponent(found.slice(name.length + 1));
 }
 
+export function getSessionTokenFromHeaders(headers: {
+  authorization?: string | string[];
+  cookie?: string | string[];
+}) {
+  const authorization = Array.isArray(headers.authorization)
+    ? headers.authorization[0]
+    : headers.authorization;
+  if (authorization?.startsWith("Bearer ")) {
+    return authorization.slice("Bearer ".length);
+  }
+
+  const cookieHeader = Array.isArray(headers.cookie)
+    ? headers.cookie[0]
+    : headers.cookie;
+  if (!cookieHeader) return undefined;
+
+  const cookies = cookieHeader.split(";").map((part) => part.trim());
+  const found = cookies.find((part) => part.startsWith(`${SESSION_COOKIE}=`));
+  if (!found) return undefined;
+
+  return decodeURIComponent(found.slice(SESSION_COOKIE.length + 1));
+}
+
 function oauthStateCookieName(context: string) {
   const safeContext = context.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
   return `${OAUTH_STATE_COOKIE_PREFIX}${safeContext}`;
@@ -100,12 +123,7 @@ export function readOAuthState(request: FastifyRequest, context: string) {
 }
 
 export function getSessionToken(request: FastifyRequest) {
-  const authHeader = request.headers.authorization;
-  if (authHeader?.startsWith("Bearer ")) {
-    return authHeader.slice("Bearer ".length);
-  }
-
-  return readCookie(request, SESSION_COOKIE);
+  return getSessionTokenFromHeaders(request.headers);
 }
 
 export async function requireSession(
