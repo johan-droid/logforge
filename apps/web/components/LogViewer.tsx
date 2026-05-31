@@ -226,20 +226,19 @@ export default function LogViewer({
       : `${connectionState.charAt(0).toUpperCase()}${connectionState.slice(1)}`;
 
   return (
-    <section className="glass-panel log-surface overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/25 buttery-fade-up">
+    <section className="glass-panel log-surface sticky top-24 self-start overflow-hidden rounded-[2rem] border border-white/10 shadow-2xl shadow-black/30 buttery-float buttery-fade-up">
       <div className="flex flex-col gap-3 border-b border-white/10 bg-white/[0.03] p-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Circle className={`h-2.5 w-2.5 fill-current ${statusTone}`} />
-            {statusLabel} log stream
+            Floating terminal
           </div>
           <div className="mt-1 truncate text-xs text-foreground/90">
             {serviceName || serviceId}
             {repository ? ` in ${repository}` : ""}
           </div>
           <div className="mt-1 truncate font-mono text-xs text-muted-foreground">
-            {provider}/{serviceId} / {displayedLogs.length.toLocaleString()}{" "}
-            buffered
+            {provider}/{serviceId} / {displayedLogs.length.toLocaleString()} buffered
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2 py-1">
@@ -373,26 +372,26 @@ export default function LogViewer({
           filteredLogs.map((log, i) => {
             const normalizedLevel = normalizeLevel(log.level);
             return (
-            <div
-              key={log.id || `${log.timestamp}-${i}`}
-              className={cn(
-                "logline-enter grid grid-cols-[2.5rem_7.75rem_4.5rem_1fr] gap-3 border-b border-white/[0.04] px-1 py-1.5 hover:bg-white/[0.04]",
-                density === "compact" ? "py-1" : "py-1.5",
-              )}
-            >
-              <span className="text-right text-[10px] text-muted-foreground/70">
-                {i + 1}
-              </span>
-              <span className="text-muted-foreground">
-                {new Date(log.timestamp).toLocaleTimeString()}
-              </span>
-              <span className={cn("truncate", levelTone(normalizedLevel))}>
-                {normalizedLevel}
-              </span>
-              <span className="min-w-0 break-words text-stone-100">
-                {log.message}
-              </span>
-            </div>
+              <div
+                key={log.id || `${log.timestamp}-${i}`}
+                className={cn(
+                  "logline-enter grid grid-cols-[2.5rem_7.75rem_4.5rem_1fr] gap-3 border-b border-white/[0.04] px-1 py-1.5 hover:bg-white/[0.04]",
+                  density === "compact" ? "py-1" : "py-1.5",
+                )}
+              >
+                <span className="text-right text-[10px] text-muted-foreground/70">
+                  {i + 1}
+                </span>
+                <span className="text-muted-foreground">
+                  {new Date(log.timestamp).toLocaleTimeString()}
+                </span>
+                <span className={cn("truncate", levelTone(normalizedLevel))}>
+                  {normalizedLevel}
+                </span>
+                <span className="min-w-0 break-words text-stone-100">
+                  {log.message}
+                </span>
+              </div>
             );
           })
         )}

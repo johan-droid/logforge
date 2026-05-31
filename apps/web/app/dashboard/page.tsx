@@ -204,40 +204,107 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="relative min-h-screen">
+    <div className="relative isolate min-h-screen overflow-hidden">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-24 top-12 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl" />
+        <div className="absolute right-[-4rem] top-28 h-96 w-96 rounded-full bg-cyan-300/10 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-80 w-80 rounded-full bg-amber-300/6 blur-3xl" />
+      </div>
       <AppHeader />
       <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 buttery-fade-up">
-        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-md border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-medium text-emerald-100 backdrop-blur-sm">
-              <RadioTower className="h-3.5 w-3.5" />
-              Unified deployment console
+        <section className="glass-panel relative overflow-hidden rounded-[2rem] border border-white/10 p-6 shadow-2xl shadow-black/20">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/60 to-transparent" />
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-medium text-emerald-100">
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 backdrop-blur-sm">
+                  <RadioTower className="h-3.5 w-3.5" />
+                  Unified deployment console
+                </span>
+                <span className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-3 py-1 text-foreground/80">
+                  Live data only
+                </span>
+                <span className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-3 py-1 text-foreground/80">
+                  Clean terminal surface
+                </span>
+              </div>
+              <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+                Provider systems and repository logs in one calm, focused view.
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+                Browse each cloud provider, inspect published repositories, and
+                stream service logs from a single dashboard with a soft glass
+                interface and a floating terminal pane.
+              </p>
             </div>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Provider systems and repository logs
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Browse each cloud provider, inspect published repositories, and
-              stream service logs from a single dashboard.
-            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="border-white/10 bg-white/5 backdrop-blur-sm"
+                onClick={loadDashboard}
+                disabled={loading}
+              >
+                <RefreshCcw
+                  className={cn("h-4 w-4", loading && "animate-spin")}
+                />
+                Refresh
+              </Button>
+              <Button asChild>
+                <a href="/settings">Connect provider</a>
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              className="border-white/10 bg-white/5"
-              onClick={loadDashboard}
-              disabled={loading}
-            >
-              <RefreshCcw
-                className={cn("h-4 w-4", loading && "animate-spin")}
-              />
-              Refresh
-            </Button>
-            <Button asChild>
-              <a href="/settings">Connect provider</a>
-            </Button>
+
+          <div className="relative mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-sm">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                Connected providers
+                <Cloud className="h-4 w-4" />
+              </div>
+              <div className="mt-4 text-3xl font-semibold tracking-tight">
+                {connectedProviders}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {providers.length} configured integrations
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-sm">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                Active systems
+                <Gauge className="h-4 w-4" />
+              </div>
+              <div className="mt-4 text-3xl font-semibold tracking-tight">
+                {activeServices}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Services loaded from your providers
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-sm">
+              <div className="text-xs text-muted-foreground">
+                Published repositories
+              </div>
+              <div className="mt-4 text-3xl font-semibold tracking-tight">
+                {totalRepos}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Grouped across connected providers
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-sm">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                Buffered log lines
+                <RadioTower className="h-4 w-4" />
+              </div>
+              <div className="mt-4 text-3xl font-semibold tracking-tight">
+                {totalLogLines.toLocaleString()}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Capped at 5,000 per system
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
 
         {error ? (
           <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
@@ -245,66 +312,6 @@ export default function Dashboard() {
             {error}
           </div>
         ) : null}
-
-        <section className="mb-6 grid gap-4 md:grid-cols-4">
-          <Card className="glass-panel border-white/10 transition-transform duration-300 hover:-translate-y-0.5">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between text-sm font-medium text-muted-foreground">
-                Connected providers
-                <Cloud className="h-4 w-4" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-semibold">{connectedProviders}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {providers.length} configured integrations
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="glass-panel border-white/10 transition-transform duration-300 hover:-translate-y-0.5">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between text-sm font-medium text-muted-foreground">
-                Active systems
-                <Gauge className="h-4 w-4" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-semibold">{activeServices}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Services loaded from your providers
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="glass-panel border-white/10 transition-transform duration-300 hover:-translate-y-0.5">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Published repositories
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-semibold">{totalRepos}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Grouped across connected providers
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="glass-panel border-white/10 transition-transform duration-300 hover:-translate-y-0.5">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between text-sm font-medium text-muted-foreground">
-                Buffered log lines
-                <RadioTower className="h-4 w-4" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-semibold">
-                {totalLogLines.toLocaleString()}
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Capped at 5,000 per system
-              </div>
-            </CardContent>
-          </Card>
-        </section>
 
         <section className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {providers.length > 0 ? (
@@ -319,7 +326,7 @@ export default function Dashboard() {
               <div
                 key={provider.key}
                 className={cn(
-                  "glass-panel rounded-lg border p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/20",
+                  "glass-panel rounded-2xl border p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/20",
                   providerTone[provider.key] || "border-white/10 bg-white/5",
                 )}
               >
@@ -344,14 +351,14 @@ export default function Dashboard() {
             })
           ) : (
             <div className="col-span-full rounded-lg border border-white/10 bg-white/[0.045] p-4 text-sm text-muted-foreground">
-              No provider integrations are available yet. Connect one in settings to populate live provider cards.
+            <div className="col-span-full rounded-2xl border border-white/10 bg-white/[0.045] p-5 text-sm text-muted-foreground">
             </div>
           )}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-          <Card className="glass-panel border-white/10">
-            <CardHeader className="gap-3 border-b border-white/10">
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+          <Card className="glass-panel overflow-hidden border-white/10">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle className="text-lg">Systems by provider and repo</CardTitle>
                 <label className="relative block sm:w-72">
@@ -383,10 +390,10 @@ export default function Dashboard() {
                             key={`${group.provider}-${repo.repoKey}`}
                             className="rounded-md border border-white/10 bg-black/20/80 transition-colors duration-200 hover:border-white/20"
                           >
-                            <div className="border-b border-white/10 px-3 py-2 text-xs text-muted-foreground">
-                              {repo.repoLabel}
-                            </div>
-                            <div className="divide-y divide-white/10">
+                      <div className="p-8 text-sm text-muted-foreground">
+                        No systems are loaded yet. Connect providers in Settings, then
+                        return to stream logs by repository.
+                      </div>
                               {repo.services.map((service) => {
                                 const selected = selectedService?.id === service.id;
                                 const count = bufferedLogs[service.id]?.length || 0;
@@ -399,7 +406,7 @@ export default function Dashboard() {
                                       "grid w-full grid-cols-[1fr_auto] gap-4 px-3 py-3 text-left transition-all duration-200 hover:bg-white/[0.06]",
                                       selected && "bg-primary/12 shadow-inner shadow-primary/20",
                                     )}
-                                  >
+                    <div className="glass-panel flex min-h-[28rem] items-center justify-center rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-muted-foreground">
                                     <span className="min-w-0">
                                       <span className="block truncate font-medium text-foreground">
                                         {service.name}
