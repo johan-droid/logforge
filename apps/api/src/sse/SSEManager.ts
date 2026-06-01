@@ -35,6 +35,34 @@ export class SSEManager {
     });
   }
 
+  sendRateLimitWarning(provider: string, serviceId: string) {
+    for (const client of this.clients) {
+      if (client.provider === provider && client.serviceId === serviceId) {
+        try {
+          client.reply.raw.write(
+            `event: rate-limit\ndata: ${JSON.stringify({ provider, serviceId })}\n\n`
+          );
+        } catch {
+          this.clients.delete(client);
+        }
+      }
+    }
+  }
+
+  sendRateLimitCleared(provider: string, serviceId: string) {
+    for (const client of this.clients) {
+      if (client.provider === provider && client.serviceId === serviceId) {
+        try {
+          client.reply.raw.write(
+            `event: rate-limit-cleared\ndata: ${JSON.stringify({ provider, serviceId })}\n\n`
+          );
+        } catch {
+          this.clients.delete(client);
+        }
+      }
+    }
+  }
+
   private broadcast(events: LogEvent[]) {
     if (events.length === 0) return;
 

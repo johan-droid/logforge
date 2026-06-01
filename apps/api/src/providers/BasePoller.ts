@@ -6,7 +6,7 @@ export abstract class BasePoller {
     protected token: string,
   ) {}
 
-  abstract poll(serviceId: string): Promise<void>;
+  abstract poll(serviceId: string): Promise<number>;
 
   protected async checkBudget() {
     const budget = await budgetManager.getBudget(this.provider);

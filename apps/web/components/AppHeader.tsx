@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Activity, Gauge, Settings, Terminal, UserCircle2, Shield } from "lucide-react";
+import { Activity, Gauge, Settings, Terminal, UserCircle2, Shield, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fetchSessionUser, logoutSession, type SessionUser } from "@/lib/auth";
@@ -20,6 +20,7 @@ export function AppHeader() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -120,8 +121,43 @@ export function AppHeader() {
               <Link href="/">{loadingUser ? "Checking..." : "Sign in"}</Link>
             </Button>
           )}
+
+          {/* Mobile Menu Toggle */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="sm:hidden h-8 w-8 border border-white/10 bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </Button>
         </div>
       </div>
+
+      {/* Mobile Navigation Dropdown */}
+      {mobileMenuOpen && (
+        <nav className="sm:hidden border-t border-white/10 bg-background/95 backdrop-blur-xl p-3 flex flex-col gap-1 buttery-fade-down animate-in slide-in-from-top-2 duration-200">
+          {navItems.map((item) => {
+            const active = pathname.startsWith(item.href);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className={cn(
+                  "flex h-9 items-center gap-3 rounded-lg px-3 text-xs text-muted-foreground transition-all duration-150 hover:bg-white/5 hover:text-foreground",
+                  active && "bg-white/10 text-foreground font-medium shadow-inner shadow-white/5"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
     </header>
   );
 }

@@ -4,10 +4,11 @@ import { HerokuClient } from "../providers/HerokuClient.js";
 import { CloudflareClient } from "../providers/CloudflareClient.js";
 import { normalizeProvider } from "../providers/registry.js";
 import type { BasePoller } from "../providers/BasePoller.js";
+import { sseManager } from "../sse/SSEManager.js";
 
 type PollerEntry = {
   client: BasePoller;
-  interval: NodeJS.Timeout;
+  stop: () => void;
   refCount: number;
 };
 
@@ -39,21 +40,48 @@ export class StreamPollerManager {
       return;
     }
 
-    // Trigger initial poll immediately
-    client.poll(serviceId).catch((err) => {
-      console.error(`Error in initial poll for ${key}:`, err);
-    });
+    let delay = 3000;
+    let timer: NodeJS.Timeout | null = null;
+    let isStopped = false;
 
-    // Run poll every 3 seconds
-    const interval = setInterval(() => {
-      client.poll(serviceId).catch((err) => {
-        console.error(`Error polling logs for ${key}:`, err);
-      });
-    }, 3000);
+    const run = async () => {
+      if (isStopped) return;
+      try {
+        const count = await client.poll(serviceId);
+        if (delay === 60000) {
+          sseManager.sendRateLimitCleared(normalized, serviceId);
+        }
+        if (count > 0) {
+          delay = 3000; // Reset to 3 seconds if logs are actively streaming
+        } else {
+          delay = Math.min(delay + 2000, 15000); // Back off up to 15 seconds if no logs
+        }
+      } catch (err) {
+        const error = err as Error;
+        console.error(`Error polling logs for ${key}:`, error);
+        if (error.message && error.message.includes("Rate limit")) {
+          delay = 60000; // Back off to 60 seconds if rate limit is reached
+          sseManager.sendRateLimitWarning(normalized, serviceId);
+        } else {
+          delay = Math.min(delay * 2, 30000); // Standard error backoff
+        }
+      }
+
+      if (!isStopped) {
+        timer = setTimeout(run, delay);
+      }
+    };
+
+    run();
 
     this.activePollers.set(key, {
       client,
-      interval,
+      stop: () => {
+        isStopped = true;
+        if (timer) {
+          clearTimeout(timer);
+        }
+      },
       refCount: 1,
     });
   }
@@ -68,7 +96,7 @@ export class StreamPollerManager {
     if (existing) {
       existing.refCount--;
       if (existing.refCount <= 0) {
-        clearInterval(existing.interval);
+        existing.stop();
         this.activePollers.delete(key);
       }
     }

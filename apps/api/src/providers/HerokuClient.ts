@@ -10,7 +10,7 @@ export class HerokuClient extends BasePoller {
     super("heroku", token);
   }
 
-  async poll(serviceId: string) {
+  async poll(serviceId: string): Promise<number> {
     await this.checkBudget();
 
     try {
@@ -33,7 +33,7 @@ export class HerokuClient extends BasePoller {
 
       const logplexUrl = sessionRes.data?.logplex_url;
       if (!logplexUrl) {
-        return;
+        return 0;
       }
 
       // 2. Fetch logs from logplexUrl (returns plain text)
@@ -43,7 +43,7 @@ export class HerokuClient extends BasePoller {
 
       const logText = logsRes.data;
       if (typeof logText !== "string" || !logText.trim()) {
-        return;
+        return 0;
       }
 
       const lines = logText.split("\n").filter((line) => line.trim());
@@ -103,8 +103,10 @@ export class HerokuClient extends BasePoller {
       if (events.length > 0) {
         EventBus.emit("log", events);
       }
+      return events.length;
     } catch (e) {
       console.error(`Failed to poll Heroku service ${serviceId}:`, e);
+      throw e;
     }
   }
 }

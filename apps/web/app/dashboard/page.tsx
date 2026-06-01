@@ -57,6 +57,7 @@ export default function Dashboard() {
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<"directory" | "terminal">("directory");
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -187,12 +188,39 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* View Toggle on Mobile/Tablet */}
+      <div className="flex border-b border-white/[0.06] bg-black/15 p-1 lg:hidden justify-center gap-1 mx-4 sm:mx-6 mt-4 rounded-xl border border-white/5 shadow-inner">
+        <button
+          onClick={() => setActiveView("directory")}
+          className={cn(
+            "flex-1 py-1.5 text-center text-xs font-semibold rounded-lg transition-all duration-200",
+            activeView === "directory"
+              ? "bg-white/10 text-foreground shadow-sm"
+              : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+          )}
+        >
+          Systems Directory
+        </button>
+        <button
+          onClick={() => setActiveView("terminal")}
+          className={cn(
+            "flex-1 py-1.5 text-center text-xs font-semibold rounded-lg transition-all duration-200",
+            activeView === "terminal"
+              ? "bg-white/10 text-foreground shadow-sm"
+              : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+          )}
+          disabled={!selectedService}
+        >
+          Terminal Output
+        </button>
+      </div>
+
       {/* Main SaaS Workspace */}
       <main className="mx-auto flex w-full max-w-7xl flex-1 gap-6 p-4 sm:p-6 lg:p-8">
         <div className="grid w-full grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
           
           {/* Left Column: Systems Directory */}
-          <div className="flex flex-col gap-3">
+          <div className={cn("flex flex-col gap-3", activeView !== "directory" && "hidden lg:flex")}>
             <div className="relative flex items-center">
               <Search className="absolute left-3 h-3.5 w-3.5 text-muted-foreground" />
               <Input
@@ -219,7 +247,10 @@ export default function Dashboard() {
                     return (
                       <button
                         key={service.id}
-                        onClick={() => setSelectedService(service)}
+                        onClick={() => {
+                          setSelectedService(service);
+                          setActiveView("terminal");
+                        }}
                         className={cn(
                           "group flex w-full items-center justify-between rounded-xl p-2.5 text-left text-xs transition-all duration-150",
                           isSelected
@@ -265,7 +296,7 @@ export default function Dashboard() {
           </div>
 
           {/* Right Column: Dynamic Output Terminal */}
-          <div className="min-w-0">
+          <div className={cn("min-w-0", activeView !== "terminal" && "hidden lg:block")}>
             {selectedService ? (
               <LogViewer
                 key={selectedService.id}

@@ -21,7 +21,7 @@ export class RenderClient extends BasePoller {
     super("render", token);
   }
 
-  async poll(serviceId: string) {
+  async poll(serviceId: string): Promise<number> {
     await this.checkBudget();
     const ownerId = process.env.RENDER_OWNER_ID;
 
@@ -72,8 +72,10 @@ export class RenderClient extends BasePoller {
       if (logs.length > 0) {
         EventBus.emit("log", logs);
       }
+      return logs.length;
     } catch (e) {
       console.error(`Failed to poll Render service ${serviceId}:`, e);
+      throw e;
     }
   }
 }

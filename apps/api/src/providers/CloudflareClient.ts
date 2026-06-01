@@ -10,7 +10,7 @@ export class CloudflareClient extends BasePoller {
     super("cloudflare", token);
   }
 
-  async poll(serviceId: string) {
+  async poll(serviceId: string): Promise<number> {
     await this.checkBudget();
 
     try {
@@ -74,8 +74,10 @@ export class CloudflareClient extends BasePoller {
       if (events.length > 0) {
         EventBus.emit("log", events);
       }
+      return events.length;
     } catch (e) {
       console.error(`Failed to poll Cloudflare Pages project ${serviceId}:`, e);
+      throw e;
     }
   }
 }

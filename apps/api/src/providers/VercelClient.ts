@@ -10,7 +10,7 @@ export class VercelClient extends BasePoller {
     super("vercel", token);
   }
 
-  async poll(serviceId: string) {
+  async poll(serviceId: string): Promise<number> {
     await this.checkBudget();
 
     try {
@@ -27,7 +27,7 @@ export class VercelClient extends BasePoller {
 
       const deployment = deploymentsRes.data?.deployments?.[0];
       if (!deployment?.uid) {
-        return;
+        return 0;
       }
 
       const deploymentId = deployment.uid;
@@ -75,8 +75,10 @@ export class VercelClient extends BasePoller {
       if (logs.length > 0) {
         EventBus.emit("log", logs);
       }
+      return logs.length;
     } catch (e) {
       console.error(`Failed to poll Vercel service ${serviceId}:`, e);
+      throw e;
     }
   }
 }
