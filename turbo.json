@@ -6,6 +6,7 @@
     "ENCRYPTION_KEY",
     "JWT_SECRET",
     "PORT",
+    "API_PORT",
     "NODE_ENV",
     "WEB_BASE_URL",
     "API_BASE_URL",
