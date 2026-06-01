@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Server } from "socket.io";
-import type { LogEvent, SessionUser } from "@repo/shared/types";
+import type { LogEvent } from "@repo/shared/types";
+import type { SessionUser } from "../auth/session.js";
 import { EventBus } from "../sse/EventBus.js";
 import { getSessionTokenFromHeaders } from "../auth/session.js";
 import { normalizeProvider } from "../providers/registry.js";
