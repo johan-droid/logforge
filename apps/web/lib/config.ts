@@ -1,6 +1,5 @@
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_BASE ||
-  "http://localhost:3001";
+// Browser requests always go through the web origin so auth cookies remain
+// scoped to the frontend domain in production.
+export const API_BASE = "";
 
 export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "LogForge";

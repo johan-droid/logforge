@@ -17,7 +17,6 @@ import { Input } from "./ui/input";
 import type { ProviderType, LogEvent } from "@repo/shared";
 import { API_BASE } from "@/lib/config";
 import { cn } from "@/lib/utils";
-import { io, type Socket } from "socket.io-client";
 
 const EMPTY_LOGS: LogEvent[] = [];
 
@@ -79,64 +78,48 @@ export default function LogViewer({
       return;
     }
 
-    let socket: Socket | null = null;
+    let stream: EventSource | null = null;
     let closed = false;
 
-    function connect() {
+    function connectStream() {
       if (closed) return;
 
       setConnectionState("connecting");
-      socket = io(API_BASE, {
+      stream = new EventSource(`${API_BASE}/api/stream/${provider}/${serviceId}`, {
         withCredentials: true,
-        transports: ["websocket", "polling"],
-        autoConnect: false,
       });
 
-      socket.on("connect", () => {
-        setConnectionState("live");
-        socket?.emit(
-          "subscribe",
-          { provider, serviceId },
-          (response: { ok: boolean; error?: string }) => {
-            if (!response.ok && response.error) {
-              setConnectionState("retrying");
-            }
-          },
-        );
-      });
-
-      socket.on("ready", () => {
+      stream.addEventListener("ready", () => {
         setConnectionState("live");
       });
 
-      socket.on("log", (data: LogEvent[]) => {
-        if (Array.isArray(data)) {
-          addLogs(serviceId, data);
+      stream.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data) as LogEvent[];
+          if (Array.isArray(data)) {
+            addLogs(serviceId, data);
+            setConnectionState("live");
+          }
+        } catch {
+          if (!closed) {
+            setConnectionState("retrying");
+          }
         }
-      });
+      };
 
-      socket.on("disconnect", () => {
+      stream.onerror = () => {
         if (!closed) {
           setConnectionState("retrying");
         }
-      });
-
-      socket.on("connect_error", () => {
-        if (!closed) {
-          setConnectionState("retrying");
-        }
-      });
-
-      socket.connect();
+      };
     }
 
-    connect();
+    connectStream();
 
     return () => {
       closed = true;
-      if (socket) {
-        socket.emit("unsubscribe", { provider, serviceId });
-        socket.disconnect();
+      if (stream) {
+        stream.close();
       }
     };
   }, [serviceId, provider, addLogs, paused]);

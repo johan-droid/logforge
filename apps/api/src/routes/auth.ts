@@ -11,6 +11,8 @@ import {
 } from "../auth/session.js";
 
 export default async function authRoutes(fastify: FastifyInstance) {
+  const webBaseUrl = process.env.WEB_BASE_URL || "http://localhost:3000";
+
   // Return the authenticated session user for frontend auth gating.
   fastify.get("/me", async (request, reply) => {
     const user = await requireSession(fastify, request).catch(() => undefined);
@@ -32,7 +34,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
   // Redirect user to Google OAuth consent screen
   fastify.get("/google", async (_request, reply) => {
     const clientId = process.env.GOOGLE_CLIENT_ID;
-    const redirectUri = `${process.env.API_BASE_URL || "http://localhost:3001"}/api/auth/google/callback`;
+    const redirectUri = `${webBaseUrl}/api/auth/google/callback`;
     const scope = encodeURIComponent("openid email profile");
 
     if (!clientId) {
@@ -70,7 +72,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = `${process.env.API_BASE_URL || "http://localhost:3001"}/api/auth/google/callback`;
+    const redirectUri = `${webBaseUrl}/api/auth/google/callback`;
 
     if (!clientId || !clientSecret) {
       reply.status(500).send({ error: "Google OAuth not configured" });
@@ -134,9 +136,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         clearSessionCookie(),
         createSessionCookie(token),
       ]);
-      reply.redirect(
-        `${process.env.WEB_BASE_URL || "http://localhost:3000"}/dashboard`,
-      );
+      reply.redirect(`${webBaseUrl}/dashboard`);
     } catch (err) {
       reply.header("Set-Cookie", clearOAuthStateCookie("google"));
       fastify.log.error(err);

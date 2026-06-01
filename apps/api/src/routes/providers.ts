@@ -29,7 +29,7 @@ type AuthQuery = {
 };
 
 function providerRedirectUri(provider: string) {
-  return `${process.env.API_BASE_URL || "http://localhost:3001"}/api/providers/${provider}/callback`;
+  return `${process.env.WEB_BASE_URL || "http://localhost:3000"}/api/providers/${provider}/callback`;
 }
 
 function buildAuthorizeUrl(provider: string, clientId: string, state: string) {

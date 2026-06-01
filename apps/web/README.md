@@ -15,8 +15,7 @@ pnpm --filter web test:watch
 
 The web app reads [apps/web/.env.example](/D:/Logforge/apps/web/.env.example:1).
 
-- `NEXT_PUBLIC_API_BASE_URL`: API base URL, defaults to `http://localhost:3001`
-- `NEXT_PUBLIC_API_BASE`: legacy fallback key (still supported)
+- `API_PROXY_TARGET`: API origin used by the Next.js `/api/*` rewrite, defaults to `http://localhost:3001`
 - `NEXT_PUBLIC_APP_NAME`: display label for the app
 
 ## Routes
@@ -30,6 +29,7 @@ The web app reads [apps/web/.env.example](/D:/Logforge/apps/web/.env.example:1).
 ## Auth model
 
 - The web app relies on API-issued HTTP-only session cookies.
+- Browser API requests go through same-origin `/api/*` rewrites so cookies stay attached to the web domain.
 - It does not store auth tokens in `localStorage`.
 
 For full workspace setup and v1 scope lock, see:

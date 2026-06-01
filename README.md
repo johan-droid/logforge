@@ -72,12 +72,11 @@ Critical API keys:
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `ENCRYPTION_KEY` (must resolve to 32 bytes)
-- `API_BASE_URL`
 - `WEB_BASE_URL`
 
 Critical Web keys:
 
-- `NEXT_PUBLIC_API_BASE_URL`
+- `API_PROXY_TARGET`
 - `NEXT_PUBLIC_APP_NAME` (optional branding)
 
 ## Scripts
