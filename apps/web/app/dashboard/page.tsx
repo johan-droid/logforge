@@ -316,50 +316,49 @@ export default function Dashboard() {
         <section className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {providers.length > 0 ? (
             providers.map((provider) => {
-            const providerServices = services.filter(
-              (service) => service.provider === provider.key,
-            );
-            const repoCount = new Set(
-              providerServices.map((service) => service.repoUrl || service.id),
-            ).size;
-            return (
-              <div
-                key={provider.key}
-                className={cn(
-                  "glass-panel rounded-2xl border p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/20",
-                  providerTone[provider.key] || "border-white/10 bg-white/5",
-                )}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-medium">{provider.label}</div>
-                  <Badge
-                    variant={provider.connected ? "default" : "secondary"}
-                    className="rounded-md"
-                  >
-                    {provider.connected ? "Connected" : "Idle"}
-                  </Badge>
-                </div>
-                <div className="mt-3 flex items-end justify-between">
-                  <div className="text-2xl font-semibold">
-                    {providerServices.length}
+              const providerServices = services.filter(
+                (service) => service.provider === provider.key,
+              );
+              const repoCount = new Set(
+                providerServices.map((service) => service.repoUrl || service.id),
+              ).size;
+              return (
+                <div
+                  key={provider.key}
+                  className={cn(
+                    "glass-panel rounded-2xl border p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/20",
+                    providerTone[provider.key] || "border-white/10 bg-white/5",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-medium">{provider.label}</div>
+                    <Badge
+                      variant={provider.connected ? "default" : "secondary"}
+                      className="rounded-md"
+                    >
+                      {provider.connected ? "Connected" : "Idle"}
+                    </Badge>
                   </div>
-                  <div className="text-xs opacity-80">systems</div>
+                  <div className="mt-3 flex items-end justify-between">
+                    <div className="text-2xl font-semibold">
+                      {providerServices.length}
+                    </div>
+                    <div className="text-xs opacity-80">systems</div>
+                  </div>
+                  <div className="mt-1 text-xs opacity-80">{repoCount} repos</div>
                 </div>
-                <div className="mt-1 text-xs opacity-80">{repoCount} repos</div>
-              </div>
-            );
+              );
             })
           ) : (
-            <div className="col-span-full rounded-lg border border-white/10 bg-white/[0.045] p-4 text-sm text-muted-foreground">
             <div className="col-span-full rounded-2xl border border-white/10 bg-white/[0.045] p-5 text-sm text-muted-foreground">
+              No providers are connected yet. Connect providers in Settings to load systems.
             </div>
           )}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
           <Card className="glass-panel overflow-hidden border-white/10">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle className="text-lg">Systems by provider and repo</CardTitle>
                 <label className="relative block sm:w-72">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -370,7 +369,6 @@ export default function Dashboard() {
                     className="h-9 border-white/10 bg-black/25 pl-9"
                   />
                 </label>
-              </div>
             </CardHeader>
             <CardContent className="smooth-scrollbar max-h-[40rem] overflow-y-auto p-0">
               {loading ? (
@@ -390,39 +388,43 @@ export default function Dashboard() {
                             key={`${group.provider}-${repo.repoKey}`}
                             className="rounded-md border border-white/10 bg-black/20/80 transition-colors duration-200 hover:border-white/20"
                           >
-                      <div className="p-8 text-sm text-muted-foreground">
-                        No systems are loaded yet. Connect providers in Settings, then
-                        return to stream logs by repository.
-                      </div>
-                              {repo.services.map((service) => {
-                                const selected = selectedService?.id === service.id;
-                                const count = bufferedLogs[service.id]?.length || 0;
-                                return (
-                                  <button
-                                    key={service.id}
-                                    type="button"
-                                    onClick={() => setSelectedService(service)}
-                                    className={cn(
-                                      "grid w-full grid-cols-[1fr_auto] gap-4 px-3 py-3 text-left transition-all duration-200 hover:bg-white/[0.06]",
-                                      selected && "bg-primary/12 shadow-inner shadow-primary/20",
-                                    )}
-                    <div className="glass-panel flex min-h-[28rem] items-center justify-center rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-muted-foreground">
-                                    <span className="min-w-0">
-                                      <span className="block truncate font-medium text-foreground">
-                                        {service.name}
-                                      </span>
-                                      <span className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
-                                        {formatProvider(service.provider)} {service.type || "service"}
-                                      </span>
-                                    </span>
-                                    <span className="text-right font-mono text-xs text-muted-foreground">
-                                      {count.toLocaleString()} lines
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
+                            {repo.services.length === 0 ? (
+                              <div className="p-8 text-sm text-muted-foreground">
+                                No systems are loaded yet. Connect providers in Settings, then
+                                return to stream logs by repository.
+                              </div>
+                            ) : (
+                              <>
+                                {repo.services.map((service) => {
+                                  const selected = selectedService?.id === service.id;
+                                  const count = bufferedLogs[service.id]?.length || 0;
+                                  return (
+                                    <button
+                                      key={service.id}
+                                      type="button"
+                                      onClick={() => setSelectedService(service)}
+                                      className={cn(
+                                        "grid w-full grid-cols-[1fr_auto] gap-4 px-3 py-3 text-left transition-all duration-200 hover:bg-white/[0.06]",
+                                        selected && "bg-primary/12 shadow-inner shadow-primary/20",
+                                      )}
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="block truncate font-medium text-foreground">
+                                          {service.name}
+                                        </div>
+                                        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
+                                          {formatProvider(service.provider)} {service.type || "service"}
+                                        </div>
+                                      </div>
+                                      <div className="text-right font-mono text-xs text-muted-foreground">
+                                        {count.toLocaleString()} lines
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </>
+                            )}
                           </div>
                         ))}
                       </div>
