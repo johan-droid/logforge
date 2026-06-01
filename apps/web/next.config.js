@@ -39,6 +39,11 @@ const apiProxyTarget = /^https?:\/\//.test(resolvedApiProxyTarget)
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async rewrites() {
+    if (!resolvedApiProxyTarget) {
+      console.warn("WARN: No API_PROXY_TARGET provided. /api proxying is disabled.");
+      return [];
+    }
+
     return [
       {
         source: "/api/:path*",
