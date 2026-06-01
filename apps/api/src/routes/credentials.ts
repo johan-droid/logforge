@@ -25,8 +25,8 @@ export default async function credentialRoutes(fastify: FastifyInstance) {
     try {
       const user = await requireSession(fastify, request);
       ensureUserRecord(user);
-    } catch (err) {
-      reply.status(401).send(err);
+    } catch {
+      return reply.status(401).send({ error: "Unauthorized" });
     }
   });
 

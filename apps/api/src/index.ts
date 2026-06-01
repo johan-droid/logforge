@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import "./env.js";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
@@ -13,39 +12,9 @@ import { startLogCleanupJob } from "./polling/LogCleanupJob.js";
 import { serviceSyncCoordinator } from "./polling/ServiceSync.js";
 import { requireSession } from "./auth/session.js";
 import { assertEncryptionConfig } from "./crypto/index.js";
+import { initializeDatabase } from "./db/index.js";
 import { normalizeProvider } from "./providers/registry.js";
 import { Server } from "socket.io";
-
-function loadEnvFile(filename: string) {
-  const envPath = path.resolve(process.cwd(), filename);
-  if (!fs.existsSync(envPath)) {
-    return;
-  }
-
-  const content = fs.readFileSync(envPath, "utf8");
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) {
-      continue;
-    }
-
-    const separatorIndex = line.indexOf("=");
-    if (separatorIndex === -1) {
-      continue;
-    }
-
-    const key = line.slice(0, separatorIndex).trim();
-    if (!key || process.env[key] !== undefined) {
-      continue;
-    }
-
-    const value = line.slice(separatorIndex + 1).trim();
-    process.env[key] = value;
-  }
-}
-
-loadEnvFile(".env.local");
-loadEnvFile(".env");
 
 const fastify = Fastify({ logger: true });
 
@@ -70,6 +39,11 @@ fastify.register(authRoutes, { prefix: "/api/auth" });
 fastify.register(credentialRoutes, { prefix: "/api/credentials" });
 fastify.register(dataRoutes, { prefix: "/api" });
 fastify.register(providerRoutes, { prefix: "/api/providers" });
+
+fastify.get("/api/health", async () => ({
+  ok: true,
+  service: "logforge-api",
+}));
 
 const socketIo = new Server(fastify.server, {
   cors: {
@@ -112,6 +86,7 @@ fastify.get("/api/stream/:provider/:serviceId", async (request, reply) => {
 const start = async () => {
   try {
     assertEncryptionConfig();
+    initializeDatabase();
     startLogCleanupJob();
     await serviceSyncCoordinator.bootstrap();
     await fastify.listen({

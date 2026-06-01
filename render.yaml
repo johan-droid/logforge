@@ -4,23 +4,34 @@ services:
     runtime: node
     rootDir: .
     plan: starter
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter api build
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter api... build
     startCommand: pnpm --filter api start
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
         value: 20
+      - key: NODE_ENV
+        value: production
+      - key: WEB_BASE_URL
+        sync: false
 
   - type: web
     name: logforge-web
     runtime: node
     rootDir: .
     plan: starter
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter web build
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter web... build
     startCommand: pnpm --filter web start
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
         value: 20
+      - key: NODE_ENV
+        value: production
       - key: NEXT_TELEMETRY_DISABLED
         value: "1"
+      - key: API_PROXY_TARGET
+        fromService:
+          type: web
+          name: logforge-api
+          property: hostport

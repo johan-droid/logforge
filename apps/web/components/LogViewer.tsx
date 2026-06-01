@@ -214,7 +214,7 @@ export default function LogViewer({
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Circle className={`h-2.5 w-2.5 fill-current ${statusTone}`} />
-            Floating terminal
+            Floating terminal · {statusLabel}
           </div>
           <div className="mt-1 truncate text-xs text-foreground/90">
             {serviceName || serviceId}

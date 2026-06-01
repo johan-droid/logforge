@@ -44,7 +44,7 @@ export default async function dataRoutes(fastify: FastifyInstance) {
       const user = await requireSession(fastify, request);
       ensureUserRecord(user);
     } catch {
-      reply.status(401).send({ error: "Unauthorized" });
+      return reply.status(401).send({ error: "Unauthorized" });
     }
   });
 
