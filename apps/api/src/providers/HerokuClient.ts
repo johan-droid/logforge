@@ -6,6 +6,7 @@ import { ProviderType } from "@repo/shared/types";
 
 export class HerokuClient extends BasePoller {
   private lastLogTimestamp = new Map<string, number>();
+  private buildCursors = new Map<string, string>();
 
   constructor(token: string) {
     super("heroku", token);
@@ -16,7 +17,7 @@ export class HerokuClient extends BasePoller {
 
     if (logType === "build") {
       try {
-        const buildsRes = await axios.get<Array<{ id: string; status: string; output_stream_url: string }>>(
+        const buildsRes = await axios.get<Array<{ id: string; status: string; output_stream_url?: string; created_at: string }>>(
           `https://api.heroku.com/apps/${serviceId}/builds`,
           {
             headers: {
@@ -28,73 +29,74 @@ export class HerokuClient extends BasePoller {
         await budgetManager.consume("heroku");
 
         const latestBuild = buildsRes.data?.[0];
-        if (latestBuild?.output_stream_url) {
-          const streamRes = await axios.get<string>(latestBuild.output_stream_url);
-          const rawText = streamRes.data || "";
-          const cursorKey = `${serviceId}:build`;
-          const lastPolledCount = this.lastLogTimestamp.get(cursorKey) || 0;
-          
-          const lines = rawText.split("\n").filter((l) => l.trim());
-          if (lines.length > lastPolledCount) {
-            const newLines = lines.slice(lastPolledCount);
-            const logs = newLines.map((line, idx) => ({
-              id: `${latestBuild.id}-${lastPolledCount + idx}-${Date.now()}`,
-              timestamp: new Date().toISOString(),
-              serviceId,
-              provider: ProviderType.HEROKU,
-              level: "info",
-              message: line,
-              type: "build" as const,
-            }));
-
-            this.lastLogTimestamp.set(cursorKey, lines.length);
-            EventBus.emit("log", logs);
-            return logs.length;
-          }
+        if (!latestBuild?.id) {
           return 0;
         }
+
+        const lastBuildId = this.buildCursors.get(`${serviceId}:build`);
+        if (lastBuildId === latestBuild.id) {
+          return 0;
+        }
+
+        const logs: Array<{
+          id: string;
+          timestamp: string;
+          serviceId: string;
+          provider: ProviderType;
+          level: string;
+          message: string;
+          type: "build";
+        }> = [];
+
+        // If output_stream_url is available, fetch build output
+        if (latestBuild.output_stream_url) {
+          try {
+            const streamRes = await axios.get<string>(latestBuild.output_stream_url);
+            const rawText = streamRes.data || "";
+            const lines = rawText.split("\n").filter((l) => l.trim());
+            
+            for (const line of lines) {
+              logs.push({
+                id: `${latestBuild.id}-${Date.now()}-${Math.random()}`,
+                timestamp: new Date().toISOString(),
+                serviceId,
+                provider: ProviderType.HEROKU,
+                level: "info",
+                message: line,
+                type: "build",
+              });
+            }
+          } catch (err) {
+            console.warn("Failed to fetch Heroku build output stream:", err);
+          }
+        }
+
+        // Always emit build status
+        logs.push({
+          id: `build-${latestBuild.id}-${Date.now()}`,
+          timestamp: new Date(latestBuild.created_at).toISOString(),
+          serviceId,
+          provider: ProviderType.HEROKU,
+          level: latestBuild.status === "failed" ? "error" : "info",
+          message: `[build:${latestBuild.id}] Status: ${latestBuild.status}`,
+          type: "build",
+        });
+
+        this.buildCursors.set(`${serviceId}:build`, latestBuild.id);
+        
+        if (logs.length > 0) {
+          EventBus.emit("log", logs);
+        }
+        return logs.length;
       } catch (err) {
-        console.warn("Failed to fetch Heroku build logs from API, running simulation:", err);
+        console.warn("Failed to fetch Heroku build logs:", err);
+        return 0;
       }
-
-      // Fallback/Simulated Heroku slug compilation logs
-      const cursorKey = `${serviceId}:build:sim`;
-      const step = this.lastLogTimestamp.get(cursorKey) || 0;
-      if (step >= 12) return 0;
-
-      const simLogs = [
-        "-----> Building source:",
-        "-----> Node.js app detected",
-        "-----> Creating runtime environment...",
-        "-----> Installing binaries",
-        "       engines.node: 20.x -> installing node v20.11.0",
-        "       engines.npm: npm v10.2.4 installed",
-        "-----> Installing node modules",
-        "       Running: npm ci",
-        "       added 742 packages in 4.12s",
-        "-----> Pruning devDependencies",
-        "-----> Caching build outputs...",
-        "-----> Discovering process types: web -> npm start",
-      ];
-
-      const logs = [{
-        id: `sim-build-heroku-${serviceId}-${step}-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        serviceId,
-        provider: ProviderType.HEROKU,
-        level: "info",
-        message: simLogs[step],
-        type: "build" as const,
-      }];
-
-      this.lastLogTimestamp.set(cursorKey, step + 1);
-      EventBus.emit("log", logs);
-      return 1;
     }
 
     try {
       const cursorKey = `${serviceId}:app`;
-      // 1. Create a log session
+      // Create a log session to fetch recent logs
       const sessionRes = await axios.post(
         `https://api.heroku.com/apps/${serviceId}/log-sessions`,
         {
@@ -116,9 +118,10 @@ export class HerokuClient extends BasePoller {
         return 0;
       }
 
-      // 2. Fetch logs from logplexUrl (returns plain text)
+      // Fetch logs from logplexUrl (returns plain text)
       const logsRes = await axios.get(logplexUrl, {
         headers: { Accept: "text/plain" },
+        timeout: 10000,
       });
 
       const logText = logsRes.data;

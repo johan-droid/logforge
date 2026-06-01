@@ -11,20 +11,25 @@ type RenderLogEntry = {
 };
 
 type RenderLogsResponse = {
-  logs?: RenderLogEntry[];
+  data?: RenderLogEntry[];
+  pagination?: {
+    next?: string;
+  };
 };
 
 type RenderDeployResponse = {
-  id?: string;
-  status?: string;
-  deploy?: {
-    id: string;
-    status: string;
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  status: string;
+  image?: {
+    url?: string;
   };
 };
 
 export class RenderClient extends BasePoller {
   private cursors = new Map<string, string>();
+  private deployCursors = new Map<string, string>();
 
   constructor(token: string) {
     super("render", token);
@@ -32,13 +37,12 @@ export class RenderClient extends BasePoller {
 
   async poll(serviceId: string, logType: "app" | "build"): Promise<number> {
     await this.checkBudget();
-    const ownerId = process.env.RENDER_OWNER_ID;
 
     if (logType === "build") {
       try {
-        // Attempt to fetch latest deploy build logs
+        // Fetch latest deploy for build logs
         const deploysRes = await axios.get<RenderDeployResponse[]>(
-          `https://api.render.com/v1/services/${serviceId}/deploys?limit=1`,
+          `https://api.render.com/v1/services/${serviceId}/deploys?limit=1&state=successful`,
           {
             headers: { Authorization: `Bearer ${this.token}` },
           }
@@ -46,114 +50,97 @@ export class RenderClient extends BasePoller {
         await budgetManager.consume("render");
 
         const latestDeploy = deploysRes.data?.[0];
-        const deployId = latestDeploy?.deploy?.id || latestDeploy?.id;
-        if (deployId) {
-          const logsRes = await axios.get<RenderLogEntry[]>(
-            `https://api.render.com/v1/services/${serviceId}/deploys/${deployId}/logs`,
-            {
-              headers: { Authorization: `Bearer ${this.token}` },
-            }
-          );
-          await budgetManager.consume("render");
-
-          const rawLogs = logsRes.data || [];
-          if (rawLogs.length > 0) {
-            const cursorKey = `${serviceId}:build`;
-            const lastPolledTime = this.cursors.get(cursorKey) || "";
-            const filtered = rawLogs.filter((log) => log.timestamp > lastPolledTime);
-            
-            if (filtered.length > 0) {
-              const logs = filtered.map((log) => ({
-                id: log.id || Math.random().toString(),
-                timestamp: log.timestamp,
-                serviceId,
-                provider: "render" as const,
-                level: "info",
-                message: log.message,
-                type: "build" as const,
-              }));
-
-              const newest = filtered[filtered.length - 1];
-              if (newest) {
-                this.cursors.set(cursorKey, newest.timestamp);
-              }
-
-              EventBus.emit("log", logs);
-              return logs.length;
-            }
-          }
+        if (!latestDeploy?.id) {
+          return 0;
         }
+
+        const deployId = latestDeploy.id;
+        const lastDeployId = this.deployCursors.get(`${serviceId}:build`);
+        
+        // Only fetch logs if this is a new deploy
+        if (lastDeployId === deployId) {
+          return 0;
+        }
+
+        // Generate build log events based on deploy status
+        const logs: Array<{
+          id: string;
+          timestamp: string;
+          serviceId: string;
+          provider: "render";
+          level: string;
+          message: string;
+          type: "build";
+        }> = [];
+
+        // Generate build log events based on deploy status
+        const statusMessages: Record<string, string> = {
+          creating: "Creating new deployment...",
+          building: "Building application...",
+          built: "Build completed successfully",
+          deploying: "Deploying to edge network...",
+          live: "Deployment is now live",
+          failed: "Deployment failed",
+        };
+
+        const statusMessage = statusMessages[latestDeploy.status] || `Deploy status: ${latestDeploy.status}`;
+        
+        logs.push({
+          id: `deploy-${deployId}-${Date.now()}`,
+          timestamp: latestDeploy.updatedAt,
+          serviceId,
+          provider: "render",
+          level: latestDeploy.status === "failed" ? "error" : "info",
+          message: `[deploy:${deployId}] ${statusMessage}`,
+          type: "build",
+        });
+
+        this.deployCursors.set(`${serviceId}:build`, deployId);
+        
+        if (logs.length > 0) {
+          EventBus.emit("log", logs);
+        }
+        return logs.length;
       } catch (err) {
-        console.warn("Failed to fetch real Render build logs, falling back to simulation:", err);
+        console.warn("Failed to fetch Render deploy status:", err);
+        return 0;
       }
-
-      // Fallback/Simulated beautiful build logs for demonstration
-      const cursorKey = `${serviceId}:build:sim`;
-      const step = parseInt(this.cursors.get(cursorKey) || "0");
-      if (step >= 12) return 0; // Simulation finished
-
-      const simLogs = [
-        "cloning git repository...",
-        "analyzing project structure: Node.js environment detected.",
-        "installing dependencies using pnpm package manager...",
-        "resolving dependencies: fetched 634 packages in 2.1s.",
-        "dependencies installed successfully.",
-        "compiling source code (pnpm build)...",
-        "next.js static rendering started.",
-        "route / (static) compiled successfully in 1.4s.",
-        "route /valve (dynamic) compiled successfully in 1.8s.",
-        "generating production static files...",
-        "deploying files to Global Edge Network...",
-        "running server healthchecks: OK.",
-        "render build deployment live!",
-      ];
-
-      const logs = [{
-        id: `sim-build-${serviceId}-${step}-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        serviceId,
-        provider: "render" as const,
-        level: "info",
-        message: `[builder] ${simLogs[step]}`,
-        type: "build" as const,
-      }];
-
-      this.cursors.set(cursorKey, (step + 1).toString());
-      EventBus.emit("log", logs);
-      return 1;
     }
 
-    // App/Runtime logs
-    if (!ownerId) {
-      throw new Error("RENDER_OWNER_ID is required to query Render logs");
-    }
-
+    // App/Runtime logs using Render's log streaming endpoint
     try {
       const cursorKey = `${serviceId}:app`;
-      const now = new Date();
-      const startTime =
-        this.cursors.get(cursorKey) ||
-        new Date(now.getTime() - 5 * 60 * 1000).toISOString();
+      const since = this.cursors.get(cursorKey);
+      
+      // Use Render's log endpoint with proper parameters
       const params = new URLSearchParams({
-        ownerId,
-        startTime,
-        endTime: now.toISOString(),
-        direction: "forward",
+        resource: serviceId,
         limit: "100",
+        direction: "forward",
       });
-      params.append("resource", serviceId);
+
+      if (since) {
+        params.append("startTime", since);
+      }
 
       const res = await axios.get<RenderLogsResponse>(
         `https://api.render.com/v1/logs?${params.toString()}`,
         {
           headers: { Authorization: `Bearer ${this.token}` },
+          timeout: 10000,
         },
       );
 
       await budgetManager.consume("render");
 
-      const logs = (res.data.logs || []).map((log) => ({
-        id: log.id,
+      const rawLogs = res.data?.data || [];
+      
+      if (rawLogs.length === 0) {
+        return 0;
+      }
+
+      const logs = rawLogs.map((log) => ({
+        id: log.id || `${log.timestamp}-${Math.random()}`,
         timestamp: log.timestamp,
         serviceId,
         provider: "render" as const,
@@ -175,7 +162,17 @@ export class RenderClient extends BasePoller {
       }
       return logs.length;
     } catch (e) {
-      console.error(`Failed to poll Render service ${serviceId}:`, e);
+      if (axios.isAxiosError(e)) {
+        if (e.response?.status === 429) {
+          throw new Error("Rate limit");
+        }
+        if (e.response?.status === 404) {
+          return 0;
+        }
+        console.error(`Failed to poll Render service ${serviceId}:`, e.message);
+      } else {
+        console.error(`Failed to poll Render service ${serviceId}:`, e);
+      }
       throw e;
     }
   }
