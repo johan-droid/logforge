@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Activity, Gauge, Settings, Terminal, UserCircle2 } from "lucide-react";
+import { Activity, Gauge, Settings, Terminal, UserCircle2, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fetchSessionUser, logoutSession, type SessionUser } from "@/lib/auth";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
+  { href: "/valve", label: "Secure Valve", icon: Shield },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/account", label: "Account", icon: UserCircle2 },
 ];

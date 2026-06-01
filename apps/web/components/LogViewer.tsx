@@ -51,11 +51,13 @@ export default function LogViewer({
   provider,
   serviceName,
   repository,
+  valveTicketId,
 }: {
   serviceId: string;
   provider: ProviderType;
   serviceName?: string;
   repository?: string;
+  valveTicketId?: string;
 }) {
   const logs = useStore((state) => state.logs[serviceId]);
   const addLogs = useStore((state) => state.addLogs);
@@ -92,7 +94,11 @@ export default function LogViewer({
       }
 
       setConnectionState("connecting");
-      stream = new EventSource(`${API_BASE}/api/stream/${provider}/${serviceId}`, {
+      const url = valveTicketId
+        ? `${API_BASE}/api/valve/stream?ticket=${valveTicketId}`
+        : `${API_BASE}/api/stream/${provider}/${serviceId}`;
+
+      stream = new EventSource(url, {
         withCredentials: true,
       });
 

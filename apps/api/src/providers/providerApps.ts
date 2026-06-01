@@ -113,7 +113,19 @@ export async function listProviderApps(
   }
 
   if (normalized === ProviderType.CLOUDFLARE) {
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    let accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    if (!accountId) {
+      const accountsRes = await fetch("https://api.cloudflare.com/client/v4/accounts", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (accountsRes.ok) {
+        const accountsData = (await accountsRes.json()) as any;
+        const accounts = accountsData?.result;
+        if (Array.isArray(accounts) && accounts.length > 0) {
+          accountId = accounts[0].id;
+        }
+      }
+    }
     if (!accountId) return [];
 
     const response = await fetchJson(

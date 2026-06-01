@@ -1,145 +1,64 @@
 # LogForge
 
-LogForge is a polycloud observability platform for connecting deployment providers, discovering services, and streaming live logs from one operational console.
+LogForge is an observability console designed to stream and inspect live deployment logs across cloud providers from a unified, low-latency interface.
 
-## Product Scope
+## Monorepo Layout
 
-The canonical v1 scope is documented in [docs/V1_SCOPE.md](docs/V1_SCOPE.md).
-If implementation details conflict with this README, use [docs/V1_SCOPE.md](docs/V1_SCOPE.md) as source of truth.
+This project is a Turborepo-managed monorepo:
 
-## Architecture
+- **`apps/web`**: Next.js 16 dashboard application using standard styling and modern typography.
+- **`apps/api`**: Fastify backend coordinator managing session authentication, credential vaulting, polling budgets, and SSE log streaming.
+- **`packages/shared`**: Common type schemas, providers, and shared constants.
+- **`packages/ui`**: Base design system primitives.
 
-This repository is a PNPM + Turborepo monorepo.
+## Features
 
-- `apps/web`: Next.js 16 application for auth, provider onboarding, account menu, dashboard, and log UX.
-- `apps/api`: Fastify service for session auth, provider credential vaulting, service discovery, polling, and SSE streaming.
-- `packages/shared`: shared provider enums, contracts, and types.
-- `packages/ui`: reusable UI components.
+- **Stateless Log streaming (Secure Valve)**: Direct observation using API tokens strictly in volatile memory. Discarded automatically on disconnect.
+- **Polycloud Support**: Native logs streaming engines for Vercel, Heroku, Cloudflare Pages, Railway, and Render.
+- **Unified Observation**: Automatically polls and aggregates logs across all active services of a cloud integration under one viewport.
+- **Observed Budget Limits**: Intelligent polling schedule limits rate usage to protect provider API quotas.
 
-## Provider Support (v1)
+## Getting Started
 
-- `render`: token + OAuth, app discovery, SSE available
-- `vercel`: token + OAuth, app discovery, SSE available
-- `heroku`: token + OAuth, app discovery, SSE available
-- `cloudflare`: token + OAuth, Pages discovery, SSE available
-- `railway`: token storage only (discovery/polling not yet implemented)
-
-## Requirements
-
-- Node.js `>= 18`
-- PNPM `9.x`
-
-## Quick Start
-
-1. Install dependencies:
-
+### 1. Install Dependencies
 ```sh
 pnpm install
 ```
 
-2. Configure API environment:
+### 2. Configure Environment Files
+Set up localized configurations for both the API service and the web app:
 
 ```sh
+# API Service
 copy apps\api\.env.example apps\api\.env.local
-```
 
-3. Configure Web environment:
-
-```sh
+# Web Interface
 copy apps\web\.env.example apps\web\.env.local
 ```
 
-4. Run all apps in development mode:
-
+### 3. Run Development Server
 ```sh
 pnpm dev
 ```
 
-Default ports:
+The services will launch on:
+- Web console: `http://localhost:3000`
+- API gateway: `http://localhost:3001`
 
-- Web: `http://localhost:3000`
-- API: `http://localhost:3001`
+## API Routing
 
-## Environment Variables
+- `/api/auth/me` — Current user session verification.
+- `/api/providers` — Configured cloud integrations list.
+- `/api/services` — Discovered user applications.
+- `/api/stream/:provider/:serviceId` — SSE live log pipe.
+- `/api/valve/apps` — Stateless app discovery.
+- `/api/valve/ticket` — Generate single-use connection ticket.
+- `/api/valve/stream` — Ephemeral SSE live log pipe.
 
-Full templates:
+## Security Controls
 
-- [apps/api/.env.example](apps/api/.env.example)
-- [apps/web/.env.example](apps/web/.env.example)
+- Integration tokens saved to the database are encrypted at rest using AES-256-GCM.
+- Session authorization relies on HTTP-only cookies.
+- Single-use, ticket-based handshake for SSE keeps tokens out of browser address bars.
 
-Critical API keys:
-
-- `DATABASE_URL`
-- `JWT_SECRET`
-- `ENCRYPTION_KEY` (must resolve to 32 bytes)
-- `WEB_BASE_URL`
-
-Critical Web keys:
-
-- `API_PROXY_TARGET`
-- `NEXT_PUBLIC_APP_NAME` (optional branding)
-
-## Scripts
-
-Root scripts:
-
-```sh
-pnpm --filter web prebuild
-pnpm dev
-pnpm lint
-pnpm build
-pnpm test
-pnpm check-types
-pnpm format
-```
-
-Targeted app scripts:
-
-```sh
-pnpm --filter web dev
-pnpm --filter web test:watch
-pnpm --filter api dev
-pnpm --filter api build
-```
-
-## Deployment (Render)
-
-This repository includes [render.yaml](render.yaml) for Blueprint-based deployment.
-
-Provisioned services:
-
-- `logforge-api`
-- `logforge-web`
-
-Deployment flow:
-
-1. Create a Render Blueprint deployment connected to this repo.
-2. Render reads [render.yaml](render.yaml) and provisions both services.
-3. Set required environment variables in each service dashboard.
-4. Redeploy both services after env values are configured.
-
-## API Surface (Current)
-
-- `GET /api/auth/me`
-- `GET /api/providers`
-- `GET /api/providers/:provider/apps`
-- `GET /api/services`
-- `GET /api/branches/:svcId`
-- `GET /api/rate-limits`
-- `GET /api/stream/:provider/:serviceId` (SSE)
-
-## Security Notes
-
-- Provider tokens are encrypted at rest.
-- Auth relies on HTTP-only session cookies.
-- OAuth state validation is enforced for callback flows.
-
-For reporting vulnerabilities, see [SECURITY.md](SECURITY.md).
-
-## CI and Quality Gates
-
-GitHub Actions CI runs lint, build, and tests for pushes and pull requests via [ci.yml](.github/workflows/ci.yml).
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and pull request expectations.
+For security reports, please refer to [SECURITY.md](SECURITY.md).
