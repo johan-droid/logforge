@@ -17,7 +17,7 @@ services:
     rootDir: .
     plan: starter
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter web build
-    startCommand: pnpm --filter web exec next start -p $PORT
+    startCommand: pnpm --filter web start
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
