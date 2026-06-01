@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000",
+    "prebuild": "node ../../scripts/verify-react-singleton.mjs",
     "build": "next build",
     "start": "node ./scripts/start.mjs",
     "lint": "eslint",

@@ -84,6 +84,7 @@ Critical Web keys:
 Root scripts:
 
 ```sh
+pnpm --filter web prebuild
 pnpm dev
 pnpm lint
 pnpm build
