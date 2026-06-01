@@ -9,6 +9,7 @@ import providerRoutes from "./routes/providers.js";
 import valveRoutes from "./routes/valve.js";
 import { sseManager } from "./sse/SSEManager.js";
 import { SocketLogManager } from "./socket/SocketLogManager.js";
+import fastifyRateLimit from "@fastify/rate-limit";
 import { startLogCleanupJob } from "./polling/LogCleanupJob.js";
 import { serviceSyncCoordinator } from "./polling/ServiceSync.js";
 import { requireSession } from "./auth/session.js";
@@ -34,6 +35,19 @@ function requiredEnv(name: string) {
 fastify.register(cors, {
   origin: process.env.WEB_BASE_URL || "http://localhost:3000",
   credentials: true,
+});
+
+// Tight global rate limiting to prevent abuse
+fastify.register(fastifyRateLimit, {
+  max: 100, // 100 requests max
+  timeWindow: "1 minute", // per 1 minute
+  errorResponseBuilder: (request, context) => {
+    return {
+      statusCode: 429,
+      error: "Too Many Requests",
+      message: `Rate limit exceeded, retry in ${context.after} time.`,
+    };
+  },
 });
 
 fastify.register(jwt, {
