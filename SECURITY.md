@@ -4,7 +4,7 @@ Observability requires handling sensitive credentials. We aim to keep your integ
 
 ## Reporting Vulnerabilities
 
-Do not open public GitHub issues for security vulnerabilities. If you discover a security issue, please email us directly at **security@logforge.dev** with:
+Do not open public GitHub issues for security vulnerabilities. If you discover a security issue, please email us directly at **sahooashutosh2022@gmail.com** with:
 
 - A description of the vulnerability and its potential impact.
 - Steps to reproduce the issue.
