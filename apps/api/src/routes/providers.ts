@@ -28,11 +28,11 @@ type AuthQuery = {
   state?: string;
 };
 
-function providerRedirectUri(provider: string) {
-  return `${process.env.WEB_BASE_URL || "http://localhost:3000"}/api/providers/${provider}/callback`;
+function providerRedirectUri(provider: string, webBaseUrl: string) {
+  return `${webBaseUrl}/api/providers/${provider}/callback`;
 }
 
-function buildAuthorizeUrl(provider: string, clientId: string, state: string) {
+function buildAuthorizeUrl(provider: string, clientId: string, state: string, webBaseUrl: string) {
   const descriptor = getProviderDescriptor(provider);
   if (!descriptor) {
     throw new Error(`Unsupported provider: ${provider}`);
@@ -46,7 +46,7 @@ function buildAuthorizeUrl(provider: string, clientId: string, state: string) {
     descriptor.scopes.join(" ");
   const redirectUri =
     process.env[`${descriptor.authEnvPrefix}_REDIRECT_URI`] ||
-    providerRedirectUri(provider);
+    providerRedirectUri(provider, webBaseUrl);
 
   const url = new URL(authUrl);
   url.searchParams.set("client_id", clientId);
@@ -57,7 +57,7 @@ function buildAuthorizeUrl(provider: string, clientId: string, state: string) {
   return url.toString();
 }
 
-async function exchangeToken(provider: string, code: string) {
+async function exchangeToken(provider: string, code: string, webBaseUrl: string) {
   const descriptor = getProviderDescriptor(provider);
   if (!descriptor) {
     throw new Error(`Unsupported provider: ${provider}`);
@@ -81,7 +81,7 @@ async function exchangeToken(provider: string, code: string) {
   params.set(
     "redirect_uri",
     process.env[`${descriptor.authEnvPrefix}_REDIRECT_URI`] ||
-      providerRedirectUri(provider),
+      providerRedirectUri(provider, webBaseUrl),
   );
 
   const response = await fetch(tokenUrl, {
@@ -128,6 +128,13 @@ async function storeProviderCredential(
 }
 
 export default async function providerRoutes(fastify: FastifyInstance) {
+  const getWebBaseUrl = (request: any) => {
+    if (process.env.WEB_BASE_URL) return process.env.WEB_BASE_URL.replace(/\/$/, "");
+    const proto = request.headers["x-forwarded-proto"] || "http";
+    const host = request.headers["x-forwarded-host"] || request.headers.host || "localhost:3000";
+    return `${Array.isArray(proto) ? proto[0] : proto}://${Array.isArray(host) ? host[0] : host}`;
+  };
+
   fastify.get("/", async (request, reply) => {
     try {
       const user = await requireSession(fastify, request);
@@ -176,7 +183,7 @@ export default async function providerRoutes(fastify: FastifyInstance) {
     }
 
     const state = crypto.randomUUID();
-    const url = buildAuthorizeUrl(provider, clientId, state);
+    const url = buildAuthorizeUrl(provider, clientId, state, getWebBaseUrl(request));
     reply.header(
       "Set-Cookie",
       createOAuthStateCookie(`provider_${provider}`, state),
@@ -213,7 +220,7 @@ export default async function providerRoutes(fastify: FastifyInstance) {
 
     let providerToken = access_token || token;
     if (!providerToken && code) {
-      providerToken = await exchangeToken(provider, code);
+      providerToken = await exchangeToken(provider, code, getWebBaseUrl(request));
     }
 
     if (!providerToken) {
@@ -231,7 +238,7 @@ export default async function providerRoutes(fastify: FastifyInstance) {
     await serviceSyncCoordinator.refreshSchedules();
 
     reply.redirect(
-      `${process.env.WEB_BASE_URL || "http://localhost:3000"}/settings?provider=${encodeURIComponent(provider)}`,
+      `${getWebBaseUrl(request)}/settings?provider=${encodeURIComponent(provider)}`,
     );
   });
 
@@ -271,8 +278,4 @@ export default async function providerRoutes(fastify: FastifyInstance) {
     return { provider, connected: true, apps };
   });
 
-  fastify.post("/logout", async (_request, reply) => {
-    reply.header("Set-Cookie", clearSessionCookie());
-    return { success: true };
-  });
 }

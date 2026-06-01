@@ -80,9 +80,16 @@ export default function LogViewer({
 
     let stream: EventSource | null = null;
     let closed = false;
+    let reconnectTimeout: any = null;
+    let retryDelay = 1000;
+    const maxRetryDelay = 30000;
 
     function connectStream() {
       if (closed) return;
+
+      if (stream) {
+        stream.close();
+      }
 
       setConnectionState("connecting");
       stream = new EventSource(`${API_BASE}/api/stream/${provider}/${serviceId}`, {
@@ -91,6 +98,7 @@ export default function LogViewer({
 
       stream.addEventListener("ready", () => {
         setConnectionState("live");
+        retryDelay = 1000;
       });
 
       stream.onmessage = (event) => {
@@ -99,18 +107,29 @@ export default function LogViewer({
           if (Array.isArray(data)) {
             addLogs(serviceId, data);
             setConnectionState("live");
+            retryDelay = 1000;
           }
         } catch {
-          if (!closed) {
-            setConnectionState("retrying");
-          }
+          // JSON parse failed, do not trigger auto-reconnection
         }
       };
 
       stream.onerror = () => {
-        if (!closed) {
-          setConnectionState("retrying");
+        if (closed) return;
+        setConnectionState("retrying");
+        
+        if (stream) {
+          stream.close();
         }
+
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout);
+        }
+
+        reconnectTimeout = setTimeout(() => {
+          retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
+          connectStream();
+        }, retryDelay);
       };
     }
 
@@ -118,6 +137,9 @@ export default function LogViewer({
 
     return () => {
       closed = true;
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
       if (stream) {
         stream.close();
       }

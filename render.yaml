@@ -1,37 +1,32 @@
 services:
   - type: web
-    name: logforge-api
+    name: logforge
     runtime: node
     rootDir: .
     plan: starter
-    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter api... build
-    startCommand: pnpm --filter api start
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
+    startCommand: pnpm start
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
-        value: 20
+        value: "20"
       - key: NODE_ENV
         value: production
+      - key: API_PORT
+        value: "4000"
+      - key: API_PROXY_TARGET
+        value: "http://localhost:4000"
+      - key: LOGFORGE_ALLOW_LOCAL_API_FALLBACK
+        value: "1"
+      - key: PORT
+        value: "10000"
       - key: WEB_BASE_URL
         sync: false
-
-  - type: web
-    name: logforge-web
-    runtime: node
-    rootDir: .
-    plan: starter
-    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter web... build
-    startCommand: pnpm --filter web start
-    autoDeploy: true
-    envVars:
-      - key: NODE_VERSION
-        value: 20
-      - key: NODE_ENV
-        value: production
-      - key: NEXT_TELEMETRY_DISABLED
-        value: "1"
-      - key: API_PROXY_TARGET
-        fromService:
-          type: web
-          name: logforge-api
-          property: hostport
+      - key: JWT_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false

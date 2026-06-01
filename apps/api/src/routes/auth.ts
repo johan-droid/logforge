@@ -131,12 +131,15 @@ export default async function authRoutes(fastify: FastifyInstance) {
         role: "user",
       });
 
-      const token = fastify.jwt.sign({
-        id: user.sub,
-        email: user.email,
-        name: user.name,
-        role: "user",
-      });
+      const token = fastify.jwt.sign(
+        {
+          id: user.sub,
+          email: user.email,
+          name: user.name,
+          role: "user",
+        },
+        { expiresIn: "7d" }
+      );
 
       reply.header("Set-Cookie", [
         clearOAuthStateCookie("google"),
