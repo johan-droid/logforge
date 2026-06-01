@@ -90,7 +90,7 @@ const start = async () => {
     startLogCleanupJob();
     await serviceSyncCoordinator.bootstrap();
     await fastify.listen({
-      port: process.env.PORT ? parseInt(process.env.PORT) : 3001,
+      port: process.env.API_PORT ? parseInt(process.env.API_PORT) : (process.env.PORT ? parseInt(process.env.PORT) : 3001),
       host: "0.0.0.0",
     });
   } catch (err) {
