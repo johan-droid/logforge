@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { FastifyInstance } from "fastify";
+import { FastifyInstance, FastifyRequest } from "fastify";
 import { db } from "../db/index.js";
 import { credentials } from "../db/schema.js";
 import { encrypt } from "../crypto/index.js";
@@ -8,7 +8,6 @@ import { and, eq } from "drizzle-orm";
 import { ensureUserRecord } from "../auth/users.js";
 import {
   clearOAuthStateCookie,
-  clearSessionCookie,
   createOAuthStateCookie,
   readOAuthState,
   requireSession,
@@ -128,7 +127,7 @@ async function storeProviderCredential(
 }
 
 export default async function providerRoutes(fastify: FastifyInstance) {
-  const getWebBaseUrl = (request: any) => {
+  const getWebBaseUrl = (request: FastifyRequest) => {
     if (process.env.WEB_BASE_URL) return process.env.WEB_BASE_URL.replace(/\/$/, "");
     const proto = request.headers["x-forwarded-proto"] || "http";
     const host = request.headers["x-forwarded-host"] || request.headers.host || "localhost:3000";

@@ -80,7 +80,7 @@ export default function LogViewer({
 
     let stream: EventSource | null = null;
     let closed = false;
-    let reconnectTimeout: any = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
     let retryDelay = 1000;
     const maxRetryDelay = 30000;
 
