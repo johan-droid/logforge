@@ -77,7 +77,8 @@ export default async function valveRoutes(fastify: FastifyInstance) {
 
   // 3. Ephemeral Server-Sent Events stream using the single-use ticket
   fastify.get("/stream", async (request, reply) => {
-    const { ticket } = request.query as { ticket?: string };
+    const { ticket, type } = request.query as { ticket?: string; type?: string };
+    const logType = type === "build" ? "build" : "app";
 
     if (!ticket || !valveTickets.has(ticket)) {
       reply.status(401).send({ error: "Invalid or expired ticket" });
@@ -97,7 +98,7 @@ export default async function valveRoutes(fastify: FastifyInstance) {
     reply.raw.flushHeaders();
 
     // Add to sseManager using a special valve client identifier
-    sseManager.addClient("valve-client", provider, serviceId, reply);
+    sseManager.addClient("valve-client", provider, serviceId, logType, reply);
 
     // Start polling in-memory for all discovered apps of this provider
     let polledServiceIds: string[] = [];
@@ -112,13 +113,13 @@ export default async function valveRoutes(fastify: FastifyInstance) {
     }
 
     for (const svcId of polledServiceIds) {
-      streamPollerManager.startPoller(provider, svcId, token);
+      streamPollerManager.startPoller(provider, svcId, logType, token);
     }
 
     // Clean up when the client disconnects
     reply.raw.on("close", () => {
       for (const svcId of polledServiceIds) {
-        streamPollerManager.stopPoller(provider, svcId, token);
+        streamPollerManager.stopPoller(provider, svcId, logType, token);
       }
     });
 

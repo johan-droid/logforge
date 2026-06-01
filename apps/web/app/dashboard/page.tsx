@@ -58,6 +58,14 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<"directory" | "terminal">("directory");
+  const [showUpdateNote, setShowUpdateNote] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowUpdateNote(false);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -131,6 +139,35 @@ export default function Dashboard() {
       </div>
 
       <AppHeader />
+
+      {/* Floating Update Note Banner */}
+      {showUpdateNote && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm rounded-2xl border border-emerald-500/20 bg-black/90 p-4 text-xs text-stone-200 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1 text-left">
+              <div className="flex items-center gap-1.5 font-semibold text-emerald-400">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                System Update
+              </div>
+              <p className="text-[11px] leading-relaxed text-stone-300">
+                We&apos;ve upgraded the terminal! You can now watch <strong>App Logs</strong> and <strong>Build Logs</strong> in separate, concurrent terminals.
+              </p>
+              <p className="text-[10px] text-muted-foreground/85 leading-normal">
+                Credentials are encrypted client-side using PBKDF2 + AES-GCM and stored in IndexedDB for a zero-database, serverless setup.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowUpdateNote(false)}
+              className="text-muted-foreground hover:text-stone-100 transition-colors p-0.5 rounded text-lg leading-none"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mini SaaS Utility Bar */}
       <div className="border-b border-white/[0.06] bg-black/10 py-3 px-4 sm:px-6 lg:px-8">

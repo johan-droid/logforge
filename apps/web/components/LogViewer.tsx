@@ -61,24 +61,36 @@ export default function LogViewer({
   valveTicketId?: string;
 }) {
   const logs = useStore((state) => state.logs[serviceId]);
+  const buildLogs = useStore((state) => state.buildLogs[serviceId]);
   const addLogs = useStore((state) => state.addLogs);
+  const addBuildLogs = useStore((state) => state.addBuildLogs);
   const clearLogs = useStore((state) => state.clearLogs);
+  const clearBuildLogs = useStore((state) => state.clearBuildLogs);
+
+  const [activeTab, setActiveTab] = useState<"app" | "build">("app");
   const [paused, setPaused] = useState(false);
   const [query, setQuery] = useState("");
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
   const [density, setDensity] = useState<DensityMode>("cozy");
   const [autoFollow, setAutoFollow] = useState(true);
-  const [connectionState, setConnectionState] = useState<
+  
+  const [appConnectionState, setAppConnectionState] = useState<
     "connecting" | "live" | "retrying" | "paused" | "rate-limited"
   >("connecting");
+  const [buildConnectionState, setBuildConnectionState] = useState<
+    "connecting" | "live" | "retrying" | "paused" | "rate-limited"
+  >("connecting");
+
   const [isWakingUp, setIsWakingUp] = useState(false);
   const [showControls, setShowControls] = useState(false);
-  const displayedLogs = logs ?? EMPTY_LOGS;
+  
+  const displayedLogs = activeTab === "app" ? (logs ?? EMPTY_LOGS) : (buildLogs ?? EMPTY_LOGS);
+  const activeConnectionState = activeTab === "app" ? appConnectionState : buildConnectionState;
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (connectionState === "connecting" || connectionState === "retrying") {
+    if (activeConnectionState === "connecting" || activeConnectionState === "retrying") {
       const timer = setTimeout(() => {
         setIsWakingUp(true);
       }, 4000);
@@ -86,11 +98,12 @@ export default function LogViewer({
     } else {
       setIsWakingUp(false);
     }
-  }, [connectionState]);
+  }, [activeConnectionState]);
 
+  // App Logs Stream connection
   useEffect(() => {
     if (paused) {
-      setConnectionState("paused");
+      setAppConnectionState("paused");
       return;
     }
 
@@ -107,26 +120,26 @@ export default function LogViewer({
         stream.close();
       }
 
-      setConnectionState("connecting");
+      setAppConnectionState("connecting");
       const url = valveTicketId
-        ? `${API_BASE}/api/valve/stream?ticket=${valveTicketId}`
-        : `${API_BASE}/api/stream/${provider}/${serviceId}`;
+        ? `${API_BASE}/api/valve/stream?ticket=${valveTicketId}&type=app`
+        : `${API_BASE}/api/stream/${provider}/${serviceId}?type=app`;
 
       stream = new EventSource(url, {
         withCredentials: true,
       });
 
       stream.addEventListener("ready", () => {
-        setConnectionState("live");
+        setAppConnectionState("live");
         retryDelay = 1000;
       });
 
       stream.addEventListener("rate-limit", () => {
-        setConnectionState("rate-limited");
+        setAppConnectionState("rate-limited");
       });
 
       stream.addEventListener("rate-limit-cleared", () => {
-        setConnectionState("live");
+        setAppConnectionState("live");
       });
 
       stream.onmessage = (event) => {
@@ -134,17 +147,17 @@ export default function LogViewer({
           const data = JSON.parse(event.data) as LogEvent[];
           if (Array.isArray(data)) {
             addLogs(serviceId, data);
-            setConnectionState("live");
+            setAppConnectionState("live");
             retryDelay = 1000;
           }
         } catch {
-          // JSON parse failed, do not trigger auto-reconnection
+          void 0;
         }
       };
 
       stream.onerror = () => {
         if (closed) return;
-        setConnectionState("retrying");
+        setAppConnectionState("retrying");
         
         if (stream) {
           stream.close();
@@ -173,6 +186,93 @@ export default function LogViewer({
       }
     };
   }, [serviceId, provider, addLogs, paused, valveTicketId]);
+
+  // Build Logs Stream connection
+  useEffect(() => {
+    if (paused) {
+      setBuildConnectionState("paused");
+      return;
+    }
+
+    let stream: EventSource | null = null;
+    let closed = false;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+    let retryDelay = 1000;
+    const maxRetryDelay = 30000;
+
+    function connectStream() {
+      if (closed) return;
+
+      if (stream) {
+        stream.close();
+      }
+
+      setBuildConnectionState("connecting");
+      const url = valveTicketId
+        ? `${API_BASE}/api/valve/stream?ticket=${valveTicketId}&type=build`
+        : `${API_BASE}/api/stream/${provider}/${serviceId}?type=build`;
+
+      stream = new EventSource(url, {
+        withCredentials: true,
+      });
+
+      stream.addEventListener("ready", () => {
+        setBuildConnectionState("live");
+        retryDelay = 1000;
+      });
+
+      stream.addEventListener("rate-limit", () => {
+        setBuildConnectionState("rate-limited");
+      });
+
+      stream.addEventListener("rate-limit-cleared", () => {
+        setBuildConnectionState("live");
+      });
+
+      stream.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data) as LogEvent[];
+          if (Array.isArray(data)) {
+            addBuildLogs(serviceId, data);
+            setBuildConnectionState("live");
+            retryDelay = 1000;
+          }
+        } catch {
+          void 0;
+        }
+      };
+
+      stream.onerror = () => {
+        if (closed) return;
+        setBuildConnectionState("retrying");
+        
+        if (stream) {
+          stream.close();
+        }
+
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout);
+        }
+
+        reconnectTimeout = setTimeout(() => {
+          retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
+          connectStream();
+        }, retryDelay);
+      };
+    }
+
+    connectStream();
+
+    return () => {
+      closed = true;
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (stream) {
+        stream.close();
+      }
+    };
+  }, [serviceId, provider, addBuildLogs, paused, valveTicketId]);
 
   useEffect(() => {
     if (!paused && autoFollow) {
@@ -241,7 +341,7 @@ export default function LogViewer({
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${provider}-${serviceId}-logs.txt`;
+    anchor.download = `${provider}-${serviceId}-${activeTab}-logs.txt`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -252,21 +352,21 @@ export default function LogViewer({
     retrying: "text-orange-200",
     paused: "text-muted-foreground",
     "rate-limited": "text-rose-400 animate-pulse",
-  }[connectionState];
+  }[activeConnectionState];
 
   const statusLabel =
-    connectionState === "live"
+    activeConnectionState === "live"
       ? "Live"
-      : connectionState === "rate-limited"
+      : activeConnectionState === "rate-limited"
         ? "Rate Limited (Paused)"
-        : `${connectionState.charAt(0).toUpperCase()}${connectionState.slice(1)}`;
+        : `${activeConnectionState.charAt(0).toUpperCase()}${activeConnectionState.slice(1)}`;
 
   return (
     <section className="glass-panel log-surface sticky top-24 self-start overflow-hidden rounded-[2rem] border border-white/10 shadow-2xl shadow-black/30 buttery-float buttery-fade-up">
       {/* Header Container */}
       <div className="flex flex-col border-b border-white/10 bg-white/[0.03] p-4 gap-3">
-        {/* Row 1: Title, Status, and Collapsible Toggle */}
-        <div className="flex items-center justify-between gap-4">
+        {/* Row 1: Title, Status, Tab Selection, and Collapsible Toggle */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <Circle className={`h-2.5 w-2.5 fill-current ${statusTone}`} />
@@ -280,7 +380,35 @@ export default function LogViewer({
             </div>
           </div>
           
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Beautiful slide tab switcher */}
+            <div className="flex items-center bg-black/40 border border-white/10 rounded-xl p-0.5 shadow-inner">
+              <button
+                type="button"
+                className={cn(
+                  "px-3 py-1 text-[11px] font-semibold rounded-lg transition-all duration-200",
+                  activeTab === "app"
+                    ? "bg-white/10 text-emerald-300 shadow-sm border border-white/5"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+                onClick={() => setActiveTab("app")}
+              >
+                App Logs
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "px-3 py-1 text-[11px] font-semibold rounded-lg transition-all duration-200",
+                  activeTab === "build"
+                    ? "bg-white/10 text-amber-300 shadow-sm border border-white/5"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+                onClick={() => setActiveTab("build")}
+              >
+                Build Logs
+              </button>
+            </div>
+
             <Button
               type="button"
               variant="outline"
@@ -329,7 +457,7 @@ export default function LogViewer({
               size="icon"
               title="Clear buffer"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={() => clearLogs(serviceId)}
+              onClick={() => (activeTab === "app" ? clearLogs(serviceId) : clearBuildLogs(serviceId))}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -440,7 +568,7 @@ export default function LogViewer({
           Server cold start detected. Waking up server container... (May take 30-60s)
         </div>
       )}
-      {connectionState === "rate-limited" && (
+      {activeConnectionState === "rate-limited" && (
         <div className="bg-rose-500/10 border-b border-rose-500/20 px-4 py-2 text-xs text-rose-200/90 flex items-center gap-2">
           <span className="relative flex h-1.5 w-1.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
@@ -465,14 +593,14 @@ export default function LogViewer({
                   Waking up the server... Since LogForge is running on a free tier, it can take up to 60 seconds to start. Thank you for your patience!
                 </p>
               </>
-            ) : connectionState === "rate-limited" ? (
+            ) : activeConnectionState === "rate-limited" ? (
               <p className="max-w-md text-rose-300/80 font-semibold animate-pulse">
                 API Rate Limit reached! Polling has been paused temporarily to prevent account suspension. It will resume automatically in 60 seconds.
               </p>
             ) : (
               <p>
                 {displayedLogs.length === 0
-                  ? "Waiting for the first log event."
+                  ? `Waiting for the first ${activeTab === "app" ? "runtime app" : "build"} log event.`
                   : "No log lines match this filter."}
               </p>
             )}

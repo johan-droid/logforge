@@ -7,6 +7,7 @@ type Client = {
   userId: string;
   provider: string;
   serviceId: string;
+  logType: "app" | "build";
 };
 
 export class SSEManager {
@@ -22,12 +23,13 @@ export class SSEManager {
     userId: string,
     provider: string,
     serviceId: string,
+    logType: "app" | "build",
     reply: FastifyReply,
   ) {
-    const client: Client = { userId, provider, serviceId, reply };
+    const client: Client = { userId, provider, serviceId, logType, reply };
     this.clients.add(client);
     reply.raw.write(
-      `event: ready\ndata: ${JSON.stringify({ provider, serviceId })}\n\n`,
+      `event: ready\ndata: ${JSON.stringify({ provider, serviceId, logType })}\n\n`,
     );
 
     reply.raw.on("close", () => {
@@ -66,18 +68,19 @@ export class SSEManager {
   private broadcast(events: LogEvent[]) {
     if (events.length === 0) return;
 
-    const eventsByService = new Map<string, LogEvent[]>();
+    const eventsByServiceAndType = new Map<string, LogEvent[]>();
     for (const event of events) {
-      const key = `${event.provider}:${event.serviceId}`;
-      if (!eventsByService.has(key)) {
-        eventsByService.set(key, []);
+      const type = event.type || "app";
+      const key = `${event.provider}:${event.serviceId}:${type}`;
+      if (!eventsByServiceAndType.has(key)) {
+        eventsByServiceAndType.set(key, []);
       }
-      eventsByService.get(key)!.push(event);
+      eventsByServiceAndType.get(key)!.push(event);
     }
 
     for (const client of this.clients) {
-      const serviceEvents = eventsByService.get(
-        `${client.provider}:${client.serviceId}`,
+      const serviceEvents = eventsByServiceAndType.get(
+        `${client.provider}:${client.serviceId}:${client.logType}`,
       );
       if (serviceEvents && serviceEvents.length > 0) {
         try {

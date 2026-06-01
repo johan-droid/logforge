@@ -36,6 +36,29 @@ export default async function authRoutes(fastify: FastifyInstance) {
     };
   });
 
+  // Return a user-specific deterministic encryption key for client-side localStorage encryption.
+  fastify.get("/storage-key", async (request, reply) => {
+    const user = await requireSession(fastify, request).catch(() => undefined);
+    if (!user) {
+      reply.status(401).send({ error: "Unauthorized" });
+      return;
+    }
+
+    const encryptionKey = process.env.ENCRYPTION_KEY || "12345678901234567890123456789012";
+    const userId = user.id || user.sub;
+    if (!userId) {
+      reply.status(400).send({ error: "Invalid user session" });
+      return;
+    }
+
+    const derivedKey = crypto
+      .createHmac("sha256", encryptionKey)
+      .update(userId)
+      .digest("base64");
+
+    return { storageKey: derivedKey };
+  });
+
   // Redirect user to Google OAuth consent screen
   fastify.get("/google", async (request, reply) => {
     const webBaseUrl = getWebBaseUrl(request);

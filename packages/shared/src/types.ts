@@ -13,6 +13,7 @@ export interface LogEvent {
   provider: ProviderType;
   level?: string;
   message: string;
+  type?: 'app' | 'build';
 }
 
 export interface Service {

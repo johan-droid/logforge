@@ -119,9 +119,9 @@ export async function listProviderApps(
         headers: { Authorization: `Bearer ${token}` },
       });
       if (accountsRes.ok) {
-        const accountsData = (await accountsRes.json()) as any;
+        const accountsData = (await accountsRes.json()) as { result?: Array<{ id: string }> };
         const accounts = accountsData?.result;
-        if (Array.isArray(accounts) && accounts.length > 0) {
+        if (Array.isArray(accounts) && accounts.length > 0 && accounts[0]) {
           accountId = accounts[0].id;
         }
       }

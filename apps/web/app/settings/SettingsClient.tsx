@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { fetchSessionUser } from "@/lib/auth";
 import { API_BASE } from "@/lib/config";
+import { encryptClientSide, getClientStorageKey } from "@/lib/crypto";
 
 type ProviderCard = {
   key: string;
@@ -137,6 +138,41 @@ export function SettingsClient({ initialProvider }: SettingsClientProps) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data.error || "Failed to save provider token");
+      }
+
+      // Also save in localStorage (AES-GCM encrypted client-side)
+      const session = await fetchSessionUser();
+      if (session) {
+        const clientKey = await getClientStorageKey(API_BASE);
+        if (clientKey) {
+          const storageKey = `logforge:credentials:${session.id}`;
+          let localCreds: Array<{
+            provider: string;
+            label: string;
+            ciphertext?: string;
+            iv?: string;
+            token?: string;
+          }> = [];
+          try {
+            const raw = localStorage.getItem(storageKey);
+            if (raw) localCreds = JSON.parse(raw);
+          } catch (e) {
+            console.warn("Failed to parse local credentials", e);
+          }
+          localCreds = localCreds.filter((c) => c.provider !== selectedProvider);
+          try {
+            const encrypted = await encryptClientSide(token, clientKey);
+            localCreds.push({
+              provider: selectedProvider,
+              label: label || selectedLabel,
+              ciphertext: encrypted.ciphertext,
+              iv: encrypted.iv,
+            });
+            localStorage.setItem(storageKey, JSON.stringify(localCreds));
+          } catch (err) {
+            console.error("Failed to encrypt token client-side:", err);
+          }
+        }
       }
 
       setToken("");

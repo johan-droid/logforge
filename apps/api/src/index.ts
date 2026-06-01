@@ -80,6 +80,9 @@ fastify.get("/api/stream/:provider/:serviceId", async (request, reply) => {
     provider: string;
     serviceId: string;
   };
+  const { type } = request.query as { type?: string };
+  const logType = type === "build" ? "build" : "app";
+
   const normalizedProvider = normalizeProvider(provider);
   if (!normalizedProvider) {
     reply.status(400).send({ error: "Unsupported provider" });
@@ -132,17 +135,17 @@ fastify.get("/api/stream/:provider/:serviceId", async (request, reply) => {
     }
 
     for (const svcId of polledServiceIds) {
-      streamPollerManager.startPoller(normalizedProvider, svcId, token);
+      streamPollerManager.startPoller(normalizedProvider, svcId, logType, token);
     }
   }
 
-  sseManager.addClient(user.id, normalizedProvider, serviceId, reply);
+  sseManager.addClient(user.id, normalizedProvider, serviceId, logType, reply);
 
   // Clean up when client closes
   reply.raw.on("close", () => {
     if (token) {
       for (const svcId of polledServiceIds) {
-        streamPollerManager.stopPoller(normalizedProvider, svcId, token);
+        streamPollerManager.stopPoller(normalizedProvider, svcId, logType, token);
       }
     }
   });

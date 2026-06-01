@@ -6,7 +6,7 @@ function getEncryptionKey() {
   const raw = process.env.ENCRYPTION_KEY;
   if (!raw) {
     throw new Error(
-      "ENCRYPTION_KEY is required and must be a 32-byte utf8 string or base64-encoded 32-byte key",
+      "ENCRYPTION_KEY is required and must be a 32-byte utf8 string, hex-encoded key, or base64-encoded key",
     );
   }
 
@@ -15,13 +15,21 @@ function getEncryptionKey() {
     return utf8Key;
   }
 
+  // A 64-character hex string resolves to 32 bytes
+  if (raw.length === 64 && /^[0-9a-fA-F]+$/.test(raw)) {
+    const hexKey = Buffer.from(raw, "hex");
+    if (hexKey.length === 32) {
+      return hexKey;
+    }
+  }
+
   const base64Key = Buffer.from(raw, "base64");
   if (base64Key.length === 32) {
     return base64Key;
   }
 
   throw new Error(
-    "ENCRYPTION_KEY must resolve to exactly 32 bytes for AES-256-GCM",
+    "ENCRYPTION_KEY must resolve to exactly 32 bytes (64 hex characters or 32 plain text characters)",
   );
 }
 

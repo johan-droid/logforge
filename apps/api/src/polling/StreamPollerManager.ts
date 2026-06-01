@@ -15,11 +15,11 @@ type PollerEntry = {
 export class StreamPollerManager {
   private activePollers = new Map<string, PollerEntry>();
 
-  startPoller(provider: string, serviceId: string, token: string) {
+  startPoller(provider: string, serviceId: string, logType: "app" | "build", token: string) {
     const normalized = normalizeProvider(provider);
     if (!normalized) return;
 
-    const key = `${normalized}:${serviceId}:${token}`;
+    const key = `${normalized}:${serviceId}:${logType}:${token}`;
     const existing = this.activePollers.get(key);
 
     if (existing) {
@@ -47,7 +47,7 @@ export class StreamPollerManager {
     const run = async () => {
       if (isStopped) return;
       try {
-        const count = await client.poll(serviceId);
+        const count = await client.poll(serviceId, logType);
         if (delay === 60000) {
           sseManager.sendRateLimitCleared(normalized, serviceId);
         }
@@ -86,11 +86,11 @@ export class StreamPollerManager {
     });
   }
 
-  stopPoller(provider: string, serviceId: string, token: string) {
+  stopPoller(provider: string, serviceId: string, logType: "app" | "build", token: string) {
     const normalized = normalizeProvider(provider);
     if (!normalized) return;
 
-    const key = `${normalized}:${serviceId}:${token}`;
+    const key = `${normalized}:${serviceId}:${logType}:${token}`;
     const existing = this.activePollers.get(key);
 
     if (existing) {

@@ -4,16 +4,7 @@ node_modules/
 .pnp.js
 
 # Environment files (keep examples)
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-**/.env
-**/.env.local
-**/.env.development.local
-**/.env.test.local
-**/.env.production.local
+.env*
 !.env.example
 !**/.env.example
 
@@ -41,9 +32,17 @@ pnpm-debug.log*
 
 # Databases and secrets
 *.db
+*.db-journal
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 *.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
 
 # Deployment and platform state
 .vercel/

@@ -26,6 +26,11 @@ LogForge is designed to minimize the storage of sensitive secrets. Depending on 
 - **Volatile Execution**: The keys live strictly in application memory (RAM) to authorize requests and are immediately deleted when the live stream disconnects.
 - **Short-Lived Tickets**: We use single-use, 10-second ticket tokens (`ticketId`) to establish Server-Sent Events (SSE) connections. This avoids passing raw tokens in URL parameters or query strings.
 
+### 3. Client-Side Safe Sync (Self-Healing Mode)
+- **AES-GCM Local Storage**: To support self-healing synchronization on ephemeral backends (like Render's free tier), any credentials duplicated in the client's `localStorage` are encrypted using client-side AES-GCM before saving to disk.
+- **Zero-Backdoor Key Derivation**: The encryption key is derived on-demand using HMAC-SHA256 from the user's active session ID mixed with the backend's master `ENCRYPTION_KEY`. It is never stored on disk.
+- **In-Memory Ephemerality**: The derived key is cached strictly in `sessionStorage` (in RAM) and destroyed immediately when the browser tab is closed, keeping local storage completely secure against cold extraction.
+
 ## Session & Transport Security
 
 - **Transit Security**: All connections must be served over HTTPS.
