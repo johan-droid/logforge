@@ -11,6 +11,18 @@ const child = spawn(process.execPath, [nextCliPath, "build"], {
   stdio: "inherit",
   env: {
     ...process.env,
+    LOGFORGE_ALLOW_LOCAL_API_FALLBACK:
+      process.env.API_PROXY_TARGET ||
+      process.env.API_BASE_URL ||
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      process.env.NEXT_PUBLIC_API_BASE ||
+      process.env.NODE_ENV === "production"
+        ? process.env.LOGFORGE_ALLOW_LOCAL_API_FALLBACK
+        : "1",
+    LOGFORGE_ENFORCE_API_PROXY_TARGET:
+      process.env.NODE_ENV === "production"
+        ? "1"
+        : process.env.LOGFORGE_ENFORCE_API_PROXY_TARGET,
     NODE_ENV: "production",
   },
 });

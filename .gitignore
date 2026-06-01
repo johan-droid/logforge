@@ -49,6 +49,9 @@ pnpm-debug.log*
 .vercel/
 .render/
 
+# Local agent scratch artifacts
+.codex-*
+
 # Editor and OS files
 .vscode/
 .idea/
