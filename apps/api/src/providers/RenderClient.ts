@@ -14,6 +14,15 @@ type RenderLogsResponse = {
   logs?: RenderLogEntry[];
 };
 
+type RenderDeployResponse = {
+  id?: string;
+  status?: string;
+  deploy?: {
+    id: string;
+    status: string;
+  };
+};
+
 export class RenderClient extends BasePoller {
   private cursors = new Map<string, string>();
 
@@ -28,7 +37,7 @@ export class RenderClient extends BasePoller {
     if (logType === "build") {
       try {
         // Attempt to fetch latest deploy build logs
-        const deploysRes = await axios.get<{ id: string; status: string }[]>(
+        const deploysRes = await axios.get<RenderDeployResponse[]>(
           `https://api.render.com/v1/services/${serviceId}/deploys?limit=1`,
           {
             headers: { Authorization: `Bearer ${this.token}` },
@@ -37,8 +46,8 @@ export class RenderClient extends BasePoller {
         await budgetManager.consume("render");
 
         const latestDeploy = deploysRes.data?.[0];
-        if (latestDeploy) {
-          const deployId = latestDeploy.id;
+        const deployId = latestDeploy?.deploy?.id || latestDeploy?.id;
+        if (deployId) {
           const logsRes = await axios.get<RenderLogEntry[]>(
             `https://api.render.com/v1/services/${serviceId}/deploys/${deployId}/logs`,
             {
