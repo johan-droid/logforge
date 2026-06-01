@@ -11,7 +11,12 @@ import {
 } from "../auth/session.js";
 
 export default async function authRoutes(fastify: FastifyInstance) {
-  const webBaseUrl = process.env.WEB_BASE_URL || "http://localhost:3000";
+  const getWebBaseUrl = (request: any) => {
+    if (process.env.WEB_BASE_URL) return process.env.WEB_BASE_URL.replace(/\/$/, "");
+    const proto = request.headers["x-forwarded-proto"] || "http";
+    const host = request.headers["x-forwarded-host"] || request.headers.host || "localhost:3000";
+    return `${Array.isArray(proto) ? proto[0] : proto}://${Array.isArray(host) ? host[0] : host}`;
+  };
 
   // Return the authenticated session user for frontend auth gating.
   fastify.get("/me", async (request, reply) => {
@@ -32,7 +37,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
   });
 
   // Redirect user to Google OAuth consent screen
-  fastify.get("/google", async (_request, reply) => {
+  fastify.get("/google", async (request, reply) => {
+    const webBaseUrl = getWebBaseUrl(request);
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const redirectUri = `${webBaseUrl}/api/auth/google/callback`;
     const scope = encodeURIComponent("openid email profile");
@@ -53,6 +59,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
   // OAuth callback — exchange code for tokens and create a session JWT
   fastify.get("/google/callback", async (request, reply) => {
+    const webBaseUrl = getWebBaseUrl(request);
     const query = request.query as Record<string, string | undefined>;
     const code = query.code;
     const state = query.state;
