@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev --port 3000",
     "prebuild": "pnpm --filter @repo/shared build && node ../../scripts/verify-react-singleton.mjs",
-    "build": "next build",
+    "build": "node ./scripts/build.mjs",
     "start": "node ./scripts/start.mjs",
     "lint": "eslint --max-warnings 0",
     "test": "vitest run",
