@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   Activity,
   AlertTriangle,
-  CheckCircle2,
   ChevronRight,
   Database,
   RefreshCcw,

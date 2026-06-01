@@ -150,7 +150,7 @@ export default function LogViewer({
         stream.close();
       }
     };
-  }, [serviceId, provider, addLogs, paused]);
+  }, [serviceId, provider, addLogs, paused, valveTicketId]);
 
   useEffect(() => {
     if (!paused && autoFollow) {
