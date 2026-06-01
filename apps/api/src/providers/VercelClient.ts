@@ -3,8 +3,37 @@ import { BasePoller } from "./BasePoller.js";
 import { EventBus } from "../sse/EventBus.js";
 import { budgetManager } from "../polling/BudgetManager.js";
 
+type VercelDeployment = {
+  uid: string;
+  created: number;
+  state: string;
+  url?: string;
+};
+
+type VercelEvent = {
+  id: string;
+  type: string;
+  created?: number;
+  payload?: {
+    text?: string;
+    [key: string]: unknown;
+  };
+};
+
+type VercelRuntimeLog = {
+  id?: string;
+  requestId?: string;
+  timestamp?: number | string;
+  level?: string;
+  type?: string;
+  message?: string;
+  text?: string;
+  [key: string]: unknown;
+};
+
 export class VercelClient extends BasePoller {
   private cursors = new Map<string, number>();
+  private deploymentCursors = new Map<string, string>();
 
   constructor(token: string) {
     super("vercel", token);
@@ -15,8 +44,7 @@ export class VercelClient extends BasePoller {
 
     try {
       // 1. Get the latest deployment ID for the project
-      // Note: serviceId is the Vercel projectId
-      const deploymentsRes = await axios.get(
+      const deploymentsRes = await axios.get<{ deployments: VercelDeployment[] }>(
         `https://api.vercel.com/v6/deployments?projectId=${serviceId}&limit=1`,
         {
           headers: { Authorization: `Bearer ${this.token}` },
@@ -33,12 +61,19 @@ export class VercelClient extends BasePoller {
       const deploymentId = deployment.uid;
 
       if (logType === "build") {
+        const lastDeployId = this.deploymentCursors.get(`${serviceId}:build`);
+        
+        // Only fetch if new deployment
+        if (lastDeployId === deploymentId) {
+          return 0;
+        }
+
         try {
           // Fetch deployment build events
           const cursorKey = `${serviceId}:build`;
           const since = this.cursors.get(cursorKey) || 0;
           
-          const eventsRes = await axios.get(
+          const eventsRes = await axios.get<VercelEvent[]>(
             `https://api.vercel.com/v2/deployments/${deploymentId}/events`,
             {
               headers: { Authorization: `Bearer ${this.token}` },
@@ -51,8 +86,9 @@ export class VercelClient extends BasePoller {
           await budgetManager.consume("vercel");
 
           const rawEvents = Array.isArray(eventsRes.data) ? eventsRes.data : [];
+          
           if (rawEvents.length > 0) {
-            const logs = rawEvents.map((evt: any) => ({
+            const logs = rawEvents.map((evt) => ({
               id: evt.id || Math.random().toString(),
               timestamp: evt.created ? new Date(evt.created).toISOString() : new Date().toISOString(),
               serviceId,
@@ -72,43 +108,26 @@ export class VercelClient extends BasePoller {
               this.cursors.set(cursorKey, maxCreated);
             }
 
+            this.deploymentCursors.set(`${serviceId}:build`, deploymentId);
             EventBus.emit("log", logs);
             return logs.length;
           }
         } catch (err) {
-          console.warn("Failed to fetch real Vercel build events, falling back to simulation:", err);
+          console.warn("Failed to fetch Vercel build events:", err);
         }
 
-        // Fallback/Simulated beautiful build logs for Vercel
-        const cursorKey = `${serviceId}:build:sim`;
-        const step = this.cursors.get(cursorKey) || 0;
-        if (step >= 11) return 0; // Simulation finished
-
-        const simLogs = [
-          "Vercel CLI: deployment created.",
-          "Analyzing source code & dependencies configuration...",
-          "Installing package dependencies (npm ci)...",
-          "Dependencies installed: npm resolved 812 packages in 3.4s.",
-          "Running Build command: next build...",
-          "Next.js Compiler initialized successfully.",
-          "Production compilation finished: zero warnings, zero errors.",
-          "Creating optimized production static pages...",
-          "Uploading build assets to Vercel Smart CDN...",
-          "Setting up edge middleware routes and functions...",
-          "Deployment ready! Deployment URL: https://logforge-vercel-deployment.vercel.app",
-        ];
-
+        // Fallback: emit deployment status
         const logs = [{
-          id: `sim-build-vercel-${serviceId}-${step}-${Date.now()}`,
-          timestamp: new Date().toISOString(),
+          id: `deploy-${deploymentId}-${Date.now()}`,
+          timestamp: new Date(deployment.created).toISOString(),
           serviceId,
           provider: "vercel" as const,
-          level: "info",
-          message: `[vercel:builder] ${simLogs[step]}`,
+          level: deployment.state === "ERROR" ? "error" : "info",
+          message: `[deploy:${deploymentId}] Deployment state: ${deployment.state}${deployment.url ? ` URL: ${deployment.url}` : ''}`,
           type: "build" as const,
         }];
 
-        this.cursors.set(cursorKey, step + 1);
+        this.deploymentCursors.set(`${serviceId}:build`, deploymentId);
         EventBus.emit("log", logs);
         return 1;
       }
@@ -118,7 +137,7 @@ export class VercelClient extends BasePoller {
       const now = Date.now();
       const since = this.cursors.get(cursorKey) || (now - 5 * 60 * 1000);
 
-      const logsRes = await axios.get(
+      const logsRes = await axios.get<{ logs?: VercelRuntimeLog[] }>(
         `https://api.vercel.com/v1/projects/${serviceId}/deployments/${deploymentId}/runtime-logs`,
         {
           headers: { Authorization: `Bearer ${this.token}` },
@@ -135,9 +154,15 @@ export class VercelClient extends BasePoller {
         ? logsRes.data
         : (logsRes.data?.logs || []);
 
-      const logs = rawLogs.map((log: Record<string, unknown>) => ({
+      if (rawLogs.length === 0) {
+        return 0;
+      }
+
+      const logs = rawLogs.map((log) => ({
         id: (log.id as string) || (log.requestId as string) || Math.random().toString(),
-        timestamp: log.timestamp ? new Date(log.timestamp as string).toISOString() : new Date().toISOString(),
+        timestamp: log.timestamp 
+          ? (typeof log.timestamp === 'number' ? new Date(log.timestamp).toISOString() : log.timestamp)
+          : new Date().toISOString(),
         serviceId,
         provider: "vercel" as const,
         level: (log.level as string) || (log.type as string) || "info",
@@ -147,8 +172,9 @@ export class VercelClient extends BasePoller {
 
       let maxTimestamp = since;
       for (const log of rawLogs) {
-        if (log.timestamp && log.timestamp > maxTimestamp) {
-          maxTimestamp = log.timestamp;
+        const ts = typeof log.timestamp === 'number' ? log.timestamp : (log.timestamp ? Date.parse(log.timestamp) : 0);
+        if (ts && ts > maxTimestamp) {
+          maxTimestamp = ts;
         }
       }
       if (maxTimestamp > since) {
@@ -165,7 +191,6 @@ export class VercelClient extends BasePoller {
           throw new Error("Rate limit");
         }
         if (e.response?.status === 404) {
-          // Project or deployment not found yet, just return 0
           return 0;
         }
         console.error(`Failed to poll Vercel service ${serviceId}:`, e.message);

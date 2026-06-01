@@ -4,8 +4,38 @@ import { EventBus } from "../sse/EventBus.js";
 import { budgetManager } from "../polling/BudgetManager.js";
 import { ProviderType } from "@repo/shared/types";
 
+type CloudflareDeployment = {
+  id: string;
+  created_on?: string;
+  modified_on?: string;
+  latest_stage?: {
+    status?: string;
+    name?: string;
+  };
+  environment?: string;
+  url?: string;
+  deployment_trigger?: {
+    type?: string;
+  };
+};
+
+type CloudflareDeploymentHistory = {
+  id: string;
+  name: string;
+  status: string;
+  started_on?: string;
+  ended_on?: string;
+  duration?: number;
+  logs?: Array<{
+    timestamp?: string;
+    message?: string;
+    level?: string;
+  }>;
+};
+
 export class CloudflareClient extends BasePoller {
   private lastSeenDeploymentId = new Map<string, string>();
+  private buildHistoryCursors = new Map<string, string>();
 
   constructor(token: string) {
     super("cloudflare", token);
@@ -14,127 +44,131 @@ export class CloudflareClient extends BasePoller {
   async poll(serviceId: string, logType: "app" | "build"): Promise<number> {
     await this.checkBudget();
 
-    if (logType === "build") {
-      // For build logs, we'll try to load Pages deployment build logs or run simulation
+    // Get account ID first
+    let accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    if (!accountId) {
       try {
-        let accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-        if (!accountId) {
-          const accountsRes = await axios.get("https://api.cloudflare.com/client/v4/accounts", {
-            headers: { Authorization: `Bearer ${this.token}` },
-          });
-          const accounts = accountsRes.data?.result;
-          if (Array.isArray(accounts) && accounts.length > 0) {
-            accountId = accounts[0].id;
-          }
-        }
-
-        if (accountId) {
-          const res = await axios.get(
-            `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${serviceId}/deployments`,
-            {
-              headers: { Authorization: `Bearer ${this.token}` },
-            }
-          );
-          await budgetManager.consume("cloudflare");
-
-          const latestDep = res.data?.result?.[0];
-          if (latestDep) {
-            // Get logs for the latest deployment
-            const logsRes = await axios.get(
-              `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${serviceId}/deployments/${latestDep.id}/history`,
-              {
-                headers: { Authorization: `Bearer ${this.token}` },
-              }
-            );
-            await budgetManager.consume("cloudflare");
-
-            const stages = logsRes.data?.result?.stages || [];
-            if (stages.length > 0) {
-              const cursorKey = `${serviceId}:build`;
-              const lastStageCount = this.lastSeenDeploymentId.get(cursorKey) || "0";
-              const parsedCount = parseInt(lastStageCount);
-              
-              if (stages.length > parsedCount) {
-                const newStages = stages.slice(parsedCount);
-                const logs = newStages.map((stage: any, idx: number) => ({
-                  id: `${latestDep.id}-${stage.name}-${idx}-${Date.now()}`,
-                  timestamp: stage.started_on || new Date().toISOString(),
-                  serviceId,
-                  provider: ProviderType.CLOUDFLARE,
-                  level: stage.status === "failure" ? "error" : "info",
-                  message: `[stage: ${stage.name}] Status: ${stage.status}. Duration: ${stage.duration ? `${stage.duration}s` : "unknown"}`,
-                  type: "build" as const,
-                }));
-
-                this.lastSeenDeploymentId.set(cursorKey, stages.length.toString());
-                EventBus.emit("log", logs);
-                return logs.length;
-              }
-              return 0;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("Failed to fetch Cloudflare Pages build logs from API, running simulation:", err);
-      }
-
-      // Fallback/Simulated Cloudflare Pages build logs
-      const cursorKey = `${serviceId}:build:sim`;
-      const step = parseInt(this.lastSeenDeploymentId.get(cursorKey) || "0");
-      if (step >= 11) return 0;
-
-      const simLogs = [
-        "Cloudflare Pages Builder: initialising build environment...",
-        "Cloning git repository...",
-        "Selected Node.js v20.x environment.",
-        "Running build command: npm run build...",
-        "Compiling Next.js application for Cloudflare Workers runtime...",
-        "Found Cloudflare configuration: wrangler.toml / next.config.js compatibility.",
-        "Generating optimized static files and edge functions (Worker routes)...",
-        "Build succeeded. Output directory (.next/static) generated.",
-        "Uploading deployment assets to Cloudflare Global Edge Network...",
-        "Activating Cloudflare CDN cache invalidation...",
-        "Deployment complete! Pages project is now LIVE at edge.",
-      ];
-
-      const logs = [{
-        id: `sim-build-cf-${serviceId}-${step}-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        serviceId,
-        provider: ProviderType.CLOUDFLARE,
-        level: "info",
-        message: simLogs[step],
-        type: "build" as const,
-      }];
-
-      this.lastSeenDeploymentId.set(cursorKey, (step + 1).toString());
-      EventBus.emit("log", logs);
-      return 1;
-    }
-
-    try {
-      const cursorKey = `${serviceId}:app`;
-      let accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-      if (!accountId) {
-        // List accounts and use the first one
         const accountsRes = await axios.get("https://api.cloudflare.com/client/v4/accounts", {
           headers: { Authorization: `Bearer ${this.token}` },
+          timeout: 10000,
         });
         const accounts = accountsRes.data?.result;
         if (Array.isArray(accounts) && accounts.length > 0) {
           accountId = accounts[0].id;
         }
+      } catch (err) {
+        console.warn("Failed to fetch Cloudflare account ID:", err);
+        return 0;
       }
+    }
 
-      if (!accountId) {
-        throw new Error("Cloudflare account ID is required but could not be resolved");
+    if (!accountId) {
+      console.warn("Cloudflare account ID not available");
+      return 0;
+    }
+
+    if (logType === "build") {
+      try {
+        // Fetch latest deployment for build info
+        const res = await axios.get<{ result: CloudflareDeployment[] }>(
+          `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${serviceId}/deployments`,
+          {
+            headers: { Authorization: `Bearer ${this.token}` },
+            params: { per_page: 1 },
+          }
+        );
+        await budgetManager.consume("cloudflare");
+
+        const latestDep = res.data?.result?.[0];
+        if (!latestDep?.id) {
+          return 0;
+        }
+
+        const lastDeployId = this.lastSeenDeploymentId.get(`${serviceId}:build`);
+        if (lastDeployId === latestDep.id) {
+          return 0;
+        }
+
+        const logs: Array<{
+          id: string;
+          timestamp: string;
+          serviceId: string;
+          provider: ProviderType;
+          level: string;
+          message: string;
+          type: "build";
+        }> = [];
+
+        // Try to fetch deployment history/stages
+        try {
+          const historyRes = await axios.get<{ result: { stages?: CloudflareDeploymentHistory[] } }>(
+            `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${serviceId}/deployments/${latestDep.id}/history`,
+            {
+              headers: { Authorization: `Bearer ${this.token}` },
+              timeout: 10000,
+            }
+          );
+          await budgetManager.consume("cloudflare");
+
+          const stages = historyRes.data?.result?.stages || [];
+          const cursorKey = `${serviceId}:build:history`;
+          const lastStageCount = parseInt(this.buildHistoryCursors.get(cursorKey) || "0");
+          
+          if (stages.length > lastStageCount) {
+            const newStages = stages.slice(lastStageCount);
+            for (const stage of newStages) {
+              logs.push({
+                id: `${latestDep.id}-${stage.name}-${Date.now()}`,
+                timestamp: stage.started_on || new Date().toISOString(),
+                serviceId,
+                provider: ProviderType.CLOUDFLARE,
+                level: stage.status === "failure" ? "error" : "info",
+                message: `[stage:${stage.name}] Status: ${stage.status}${stage.duration ? `, Duration: ${stage.duration}s` : ''}`,
+                type: "build",
+              });
+            }
+            this.buildHistoryCursors.set(cursorKey, stages.length.toString());
+          }
+        } catch (err) {
+          console.warn("Failed to fetch Cloudflare deployment history:", err);
+        }
+
+        // Always emit deployment status
+        if (logs.length === 0) {
+          logs.push({
+            id: `deploy-${latestDep.id}-${Date.now()}`,
+            timestamp: latestDep.created_on || new Date().toISOString(),
+            serviceId,
+            provider: ProviderType.CLOUDFLARE,
+            level: latestDep.latest_stage?.status === "failure" ? "error" : "info",
+            message: `[deploy:${latestDep.id}] Status: ${latestDep.latest_stage?.status || "unknown"}${latestDep.url ? `, URL: ${latestDep.url}` : ''}`,
+            type: "build",
+          });
+        }
+
+        this.lastSeenDeploymentId.set(`${serviceId}:build`, latestDep.id);
+        
+        if (logs.length > 0) {
+          EventBus.emit("log", logs);
+        }
+        return logs.length;
+      } catch (err) {
+        console.warn("Failed to fetch Cloudflare Pages build logs:", err);
+        return 0;
       }
+    }
 
-      // Fetch deployments for the pages project (serviceId is the project name)
-      const res = await axios.get(
+    // App/Runtime logs - track deployment changes
+    try {
+      const cursorKey = `${serviceId}:app`;
+      
+      // Fetch deployments for the pages project
+      const res = await axios.get<{ result: CloudflareDeployment[] }>(
         `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${serviceId}/deployments`,
         {
           headers: { Authorization: `Bearer ${this.token}` },
+          params: { per_page: 10 },
+          timeout: 10000,
         }
       );
 
@@ -155,7 +189,7 @@ export class CloudflareClient extends BasePoller {
             serviceId,
             provider: ProviderType.CLOUDFLARE,
             level: dep.latest_stage?.status === "failure" ? "error" : "info",
-            message: `Deployment ${dep.id} updated. Status: ${dep.latest_stage?.status || "unknown"}. Environment: ${dep.environment}. URL: ${dep.url}`,
+            message: `Deployment ${dep.id} updated. Status: ${dep.latest_stage?.status || "unknown"}. Environment: ${dep.environment || "production"}. URL: ${dep.url || "N/A"}`,
             type: "app" as const,
           });
           newestId = dep.id;
