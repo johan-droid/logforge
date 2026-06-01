@@ -4,7 +4,7 @@ services:
     runtime: node
     rootDir: .
     plan: starter
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter api... build
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter api... build
     startCommand: pnpm --filter api start
     autoDeploy: true
     envVars:
@@ -20,7 +20,7 @@ services:
     runtime: node
     rootDir: .
     plan: starter
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter web... build
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter web... build
     startCommand: pnpm --filter web start
     autoDeploy: true
     envVars:
