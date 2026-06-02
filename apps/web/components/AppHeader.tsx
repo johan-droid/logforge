@@ -10,6 +10,7 @@ import { fetchSessionUser, logoutSession, type SessionUser } from "@/lib/auth";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
+  { href: "/terminal", label: "Terminal", icon: Terminal },
   { href: "/valve", label: "Secure Valve", icon: Shield },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/account", label: "Account", icon: UserCircle2 },
