@@ -200,10 +200,8 @@ export class CloudflareClient extends BasePoller {
         this.lastSeenDeploymentId.set(cursorKey, newestId);
       }
 
-      if (events.length === 0 && !lastId) {
-        if (deployments.length > 0) {
-          this.lastSeenDeploymentId.set(cursorKey, deployments[0].id);
-        }
+      if (events.length === 0 && !lastId && deployments.length > 0) {
+        this.lastSeenDeploymentId.set(cursorKey, deployments[0].id);
       }
 
       if (events.length > 0) {
