@@ -36,11 +36,13 @@ function createPool() {
   }
 
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is required");
-  }
-
-  return new Pool({ connectionString, max: 20 });
+  return new Pool({
+    // DECISION(jules): keep module import side-effect free so startup can emit
+    // a clear fatal log before the first database query if Render env vars are missing.
+    connectionString:
+      connectionString || "postgres://missing:missing@127.0.0.1:1/missing",
+    max: 20,
+  });
 }
 
 export const pool = createPool();

@@ -8,7 +8,7 @@ import { RenderClient } from "../providers/RenderClient.js";
 import { VercelClient } from "../providers/VercelClient.js";
 import { getCloudflareAccountId } from "../providers/providerApps.js";
 import { normalizeProvider } from "../providers/registry.js";
-import { createRedisClient } from "../redis.js";
+import { createRedisClient, isRedisConfigured } from "../redis.js";
 import { sseManager } from "../sse/SSEManager.js";
 
 type PollerEntry = {
@@ -25,7 +25,7 @@ export class StreamPollerManager {
     string,
     { client: CloudflareWorkersClient; refCount: number }
   >();
-  private redis = createRedisClient();
+  private redis = isRedisConfigured() ? createRedisClient() : null;
 
   async startPoller(
     provider: string,
@@ -186,11 +186,17 @@ export class StreamPollerManager {
   }
 
   private async acquireLock(lockKey: string) {
+    if (!this.redis) {
+      return true;
+    }
     const result = await this.redis.set(lockKey, INSTANCE_ID, "EX", 30, "NX");
     return result === "OK";
   }
 
   private async refreshLock(lockKey: string) {
+    if (!this.redis) {
+      return true;
+    }
     const currentOwner = await this.redis.get(lockKey);
     if (currentOwner !== INSTANCE_ID) {
       return false;
@@ -200,6 +206,9 @@ export class StreamPollerManager {
   }
 
   private async releaseLock(lockKey: string) {
+    if (!this.redis) {
+      return;
+    }
     const currentOwner = await this.redis.get(lockKey);
     if (currentOwner === INSTANCE_ID) {
       await this.redis.del(lockKey);

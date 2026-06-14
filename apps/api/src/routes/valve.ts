@@ -3,10 +3,14 @@ import { FastifyInstance } from "fastify";
 import { listProviderApps, validateProviderToken } from "../providers/providerApps.js";
 import { normalizeProvider } from "../providers/registry.js";
 import { streamPollerManager } from "../polling/StreamPollerManager.js";
-import { createRedisClient } from "../redis.js";
+import { createRedisClient, isRedisConfigured } from "../redis.js";
 import { sseManager } from "../sse/SSEManager.js";
 
-const redis = createRedisClient();
+const redis = isRedisConfigured() ? createRedisClient() : null;
+const valveTickets = new Map<
+  string,
+  { provider: string; token: string; serviceId: string }
+>();
 
 type TicketBody = {
   provider: string;
@@ -62,12 +66,19 @@ export default async function valveRoutes(fastify: FastifyInstance) {
     }
 
     const ticketId = crypto.randomUUID();
-    await redis.set(
-      `valve-ticket:${ticketId}`,
-      JSON.stringify({ provider: normalized, token, serviceId }),
-      "EX",
-      10,
-    );
+    if (redis) {
+      await redis.set(
+        `valve-ticket:${ticketId}`,
+        JSON.stringify({ provider: normalized, token, serviceId }),
+        "EX",
+        10,
+      );
+    } else {
+      valveTickets.set(ticketId, { provider: normalized, token, serviceId });
+      setTimeout(() => {
+        valveTickets.delete(ticketId);
+      }, 10_000);
+    }
 
     return { ticketId };
   });
@@ -84,7 +95,13 @@ export default async function valveRoutes(fastify: FastifyInstance) {
         return;
       }
 
-      const rawTicket = await redis.getdel(`valve-ticket:${ticket}`);
+      const rawTicket = redis
+        ? await redis.getdel(`valve-ticket:${ticket}`)
+        : (() => {
+            const ticketData = valveTickets.get(ticket);
+            valveTickets.delete(ticket);
+            return ticketData ? JSON.stringify(ticketData) : null;
+          })();
       if (!rawTicket) {
         reply.status(401).send({ error: "Invalid or expired ticket" });
         return;

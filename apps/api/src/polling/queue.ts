@@ -1,13 +1,39 @@
 import { Queue, Worker } from "bullmq";
-import { createRedisClient } from "../redis.js";
+import { createRedisClient, isRedisConfigured } from "../redis.js";
 
-const connection = createRedisClient();
+type RepeatableJob = { id?: string; key: string };
 
-export const serviceSyncQueue = new Queue("service-sync", { connection });
+type ServiceSyncQueueLike = {
+  add: (
+    name: string,
+    data: { credentialId: string },
+    options: { repeat: { every: number }; jobId: string },
+  ) => Promise<void>;
+  getRepeatableJobs: () => Promise<RepeatableJob[]>;
+  removeRepeatableByKey: (key: string) => Promise<void>;
+  waitUntilReady: () => Promise<void>;
+};
+
+const connection = isRedisConfigured() ? createRedisClient() : null;
+
+export const serviceSyncQueue: ServiceSyncQueueLike = connection
+  ? new Queue("service-sync", { connection })
+  : {
+      async add() {},
+      async getRepeatableJobs() {
+        return [];
+      },
+      async removeRepeatableByKey() {},
+      async waitUntilReady() {},
+    };
 
 export function startServiceSyncWorker(
   processFn: (credentialId: string) => Promise<void>,
 ) {
+  if (!connection) {
+    return null;
+  }
+
   return new Worker(
     "service-sync",
     async (job: { data: { credentialId: string } }) => {

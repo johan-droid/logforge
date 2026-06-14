@@ -21,6 +21,7 @@ import { serviceSyncCoordinator } from "./polling/ServiceSync.js";
 import { startLogCleanupJob } from "./polling/LogCleanupJob.js";
 import { streamPollerManager } from "./polling/StreamPollerManager.js";
 import { normalizeProvider } from "./providers/registry.js";
+import { isRedisConfigured } from "./redis.js";
 import { SocketLogManager } from "./socket/SocketLogManager.js";
 import { sseManager } from "./sse/SSEManager.js";
 import { Server } from "socket.io";
@@ -211,6 +212,16 @@ const start = async () => {
     assertEncryptionConfig();
     assertNotPlaceholder("JWT_SECRET", requiredEnv("JWT_SECRET"));
     assertNotPlaceholder("ENCRYPTION_KEY", process.env.ENCRYPTION_KEY ?? "");
+    if (!process.env.DATABASE_URL) {
+      throw new Error(
+        "DATABASE_URL is required in production. On Render, set it from your Postgres service or environment group.",
+      );
+    }
+    if (!isRedisConfigured()) {
+      fastify.log.warn(
+        "REDIS_URL is not set; starting in single-instance mode with in-memory Redis fallbacks disabled.",
+      );
+    }
     await initializeDatabase();
     startLogCleanupJob();
     await serviceSyncCoordinator.bootstrap();

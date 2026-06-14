@@ -2,7 +2,7 @@ import { RATE_LIMITS } from "@repo/shared/constants";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { rateLimitState } from "../db/schema.js";
-import { createRedisClient } from "../redis.js";
+import { createRedisClient, isRedisConfigured } from "../redis.js";
 
 type BudgetState = {
   callsUsed: number;
@@ -11,12 +11,12 @@ type BudgetState = {
 };
 
 export class BudgetManager {
-  private redis = createRedisClient();
+  private redis = isRedisConfigured() ? createRedisClient() : null;
 
   async getBudget(provider: string, scope = "global"): Promise<BudgetState> {
     const budgetKey = scope === "global" ? provider : `${provider}:${scope}`;
     const redisKey = `budget:${provider}:${scope}`;
-    const cached = await this.redis.get(redisKey);
+    const cached = this.redis ? await this.redis.get(redisKey) : null;
     if (cached) {
       const parsed = JSON.parse(cached) as {
         callsUsed: number;
@@ -65,7 +65,9 @@ export class BudgetManager {
       state.windowStart = now;
       await this.saveState(budgetKey, state);
     } else {
-      await this.cacheState(redisKey, state);
+      if (this.redis) {
+        await this.cacheState(redisKey, state);
+      }
     }
 
     return state;
@@ -89,10 +91,19 @@ export class BudgetManager {
       .where(eq(rateLimitState.provider, budgetKey));
 
     const [provider, ...scopeParts] = budgetKey.split(":");
-    await this.cacheState(`budget:${provider}:${scopeParts.join(":") || "global"}`, state);
+    if (this.redis) {
+      await this.cacheState(
+        `budget:${provider}:${scopeParts.join(":") || "global"}`,
+        state,
+      );
+    }
   }
 
   private async cacheState(redisKey: string, state: BudgetState) {
+    if (!this.redis) {
+      return;
+    }
+
     await this.redis.set(
       redisKey,
       JSON.stringify({

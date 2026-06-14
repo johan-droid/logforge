@@ -5,6 +5,10 @@ const require = createRequire(import.meta.url);
 
 type RedisConstructor = typeof Redis;
 
+export function isRedisConfigured() {
+  return Boolean(process.env.REDIS_URL?.trim());
+}
+
 function getRedisConstructor(): RedisConstructor {
   if (process.env.NODE_ENV !== "test") {
     return Redis;
@@ -18,8 +22,12 @@ function getRedisConstructor(): RedisConstructor {
 }
 
 export function createRedisClient() {
+  if (!isRedisConfigured()) {
+    throw new Error("REDIS_URL is required to create a Redis client");
+  }
+
   const RedisClient = getRedisConstructor();
-  return new RedisClient(process.env.REDIS_URL || "redis://localhost:6379", {
+  return new RedisClient(process.env.REDIS_URL!, {
     lazyConnect: process.env.NODE_ENV !== "test",
     maxRetriesPerRequest: null,
   });
