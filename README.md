@@ -36,7 +36,16 @@ copy apps\api\.env.example apps\api\.env.local
 copy apps\web\.env.example apps\web\.env.local
 ```
 
-### 3. Run Development Server
+### 3. Start Local Infra
+```sh
+pnpm dev:infra
+```
+
+This brings up:
+- Postgres on `postgres://logforge:logforge@localhost:5432/logforge`
+- Redis on `redis://localhost:6379`
+
+### 4. Run Development Server
 ```sh
 pnpm dev
 ```
@@ -58,6 +67,7 @@ The services will launch on:
 ## Security Controls
 
 - Integration tokens saved to the database are encrypted at rest using AES-256-GCM.
+- Provider Personal Access Tokens are validated server-side and never exposed in client-visible URLs.
 - Session authorization relies on HTTP-only cookies.
 - Single-use, ticket-based handshake for SSE keeps tokens out of browser address bars.
 

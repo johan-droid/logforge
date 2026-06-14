@@ -1,6 +1,6 @@
+import type { LogEvent } from "@repo/shared/types";
 import { FastifyReply } from "fastify";
 import { EventBus } from "./EventBus.js";
-import type { LogEvent } from "@repo/shared/types";
 
 type Client = {
   reply: FastifyReply;
@@ -11,12 +11,20 @@ type Client = {
 };
 
 export class SSEManager {
-  private clients: Set<Client> = new Set();
+  private clientsByRoom: Map<string, Set<Client>> = new Map();
 
   constructor() {
     EventBus.on("log", (events: LogEvent[]) => {
       this.broadcast(events);
     });
+  }
+
+  private roomKey(
+    provider: string,
+    serviceId: string,
+    logType: "app" | "build",
+  ) {
+    return `${provider}:${serviceId}:${logType}`;
   }
 
   addClient(
@@ -27,66 +35,83 @@ export class SSEManager {
     reply: FastifyReply,
   ) {
     const client: Client = { userId, provider, serviceId, logType, reply };
-    this.clients.add(client);
+    const key = this.roomKey(provider, serviceId, logType);
+    if (!this.clientsByRoom.has(key)) {
+      this.clientsByRoom.set(key, new Set());
+    }
+    this.clientsByRoom.get(key)!.add(client);
+
     reply.raw.write(
       `event: ready\ndata: ${JSON.stringify({ provider, serviceId, logType })}\n\n`,
     );
-
     reply.raw.on("close", () => {
-      this.clients.delete(client);
+      const room = this.clientsByRoom.get(key);
+      room?.delete(client);
+      if (room && room.size === 0) {
+        this.clientsByRoom.delete(key);
+      }
     });
   }
 
   sendRateLimitWarning(provider: string, serviceId: string) {
-    for (const client of this.clients) {
-      if (client.provider === provider && client.serviceId === serviceId) {
-        try {
-          client.reply.raw.write(
-            `event: rate-limit\ndata: ${JSON.stringify({ provider, serviceId })}\n\n`
-          );
-        } catch {
-          this.clients.delete(client);
-        }
-      }
-    }
+    this.emitRoomEvent("rate-limit", provider, serviceId);
   }
 
   sendRateLimitCleared(provider: string, serviceId: string) {
-    for (const client of this.clients) {
-      if (client.provider === provider && client.serviceId === serviceId) {
+    this.emitRoomEvent("rate-limit-cleared", provider, serviceId);
+  }
+
+  private emitRoomEvent(
+    eventName: "rate-limit" | "rate-limit-cleared",
+    provider: string,
+    serviceId: string,
+  ) {
+    for (const logType of ["app", "build"] as const) {
+      const room = this.clientsByRoom.get(this.roomKey(provider, serviceId, logType));
+      if (!room) {
+        continue;
+      }
+
+      for (const client of room) {
         try {
           client.reply.raw.write(
-            `event: rate-limit-cleared\ndata: ${JSON.stringify({ provider, serviceId })}\n\n`
+            `event: ${eventName}\ndata: ${JSON.stringify({ provider, serviceId })}\n\n`,
           );
         } catch {
-          this.clients.delete(client);
+          room.delete(client);
         }
       }
     }
   }
 
   private broadcast(events: LogEvent[]) {
-    if (events.length === 0) return;
-
-    const eventsByServiceAndType = new Map<string, LogEvent[]>();
-    for (const event of events) {
-      const type = event.type || "app";
-      const key = `${event.provider}:${event.serviceId}:${type}`;
-      if (!eventsByServiceAndType.has(key)) {
-        eventsByServiceAndType.set(key, []);
-      }
-      eventsByServiceAndType.get(key)!.push(event);
+    if (events.length === 0) {
+      return;
     }
 
-    for (const client of this.clients) {
-      const serviceEvents = eventsByServiceAndType.get(
-        `${client.provider}:${client.serviceId}:${client.logType}`,
-      );
-      if (serviceEvents && serviceEvents.length > 0) {
+    const grouped = new Map<string, LogEvent[]>();
+    for (const event of events) {
+      const type = event.type || "app";
+      const key = this.roomKey(event.provider, event.serviceId, type);
+      const roomEvents = grouped.get(key);
+      if (roomEvents) {
+        roomEvents.push(event);
+      } else {
+        grouped.set(key, [event]);
+      }
+    }
+
+    for (const [key, roomEvents] of grouped) {
+      const room = this.clientsByRoom.get(key);
+      if (!room) {
+        continue;
+      }
+
+      for (const client of room) {
         try {
-          client.reply.raw.write(`data: ${JSON.stringify(serviceEvents)}\n\n`);
+          client.reply.raw.write(`data: ${JSON.stringify(roomEvents)}\n\n`);
         } catch {
-          this.clients.delete(client);
+          room.delete(client);
         }
       }
     }

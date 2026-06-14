@@ -1,14 +1,14 @@
+import crypto from "node:crypto";
+import { and, eq } from "drizzle-orm";
 import { FastifyInstance } from "fastify";
+import { ensureUserRecord } from "../auth/users.js";
+import { requireSession } from "../auth/session.js";
+import { encrypt } from "../crypto/index.js";
 import { db } from "../db/index.js";
 import { credentials } from "../db/schema.js";
-import { encrypt } from "../crypto/index.js";
-import { eq, and } from "drizzle-orm";
-import crypto from "crypto";
-import { requireSession } from "../auth/session.js";
-import { ensureUserRecord } from "../auth/users.js";
+import { serviceSyncCoordinator } from "../polling/ServiceSync.js";
 import { normalizeProvider } from "../providers/registry.js";
 import { validateProviderToken } from "../providers/providerApps.js";
-import { serviceSyncCoordinator } from "../polling/ServiceSync.js";
 
 type CredentialBody = {
   provider: string;
@@ -24,7 +24,7 @@ export default async function credentialRoutes(fastify: FastifyInstance) {
   fastify.addHook("onRequest", async (request, reply) => {
     try {
       const user = await requireSession(fastify, request);
-      ensureUserRecord(user);
+      await ensureUserRecord(user);
     } catch {
       return reply.status(401).send({ error: "Unauthorized" });
     }
@@ -32,7 +32,7 @@ export default async function credentialRoutes(fastify: FastifyInstance) {
 
   fastify.get("/", async (request) => {
     const userId = ((await requireSession(fastify, request)) as JwtUser).id;
-    const creds = db
+    return db
       .select({
         id: credentials.id,
         provider: credentials.provider,
@@ -40,9 +40,7 @@ export default async function credentialRoutes(fastify: FastifyInstance) {
         createdAt: credentials.createdAt,
       })
       .from(credentials)
-      .where(eq(credentials.userId, userId))
-      .all();
-    return creds;
+      .where(eq(credentials.userId, userId));
   });
 
   fastify.post("/", async (request, reply) => {
@@ -62,15 +60,13 @@ export default async function credentialRoutes(fastify: FastifyInstance) {
 
     const isValid = await validateProviderToken(normalizedProvider, token);
     if (!isValid) {
-      reply
-        .status(400)
-        .send({ error: "Provider token could not be validated" });
+      reply.status(400).send({ error: "Provider token could not be validated" });
       return;
     }
 
-    const { encToken, iv, authTag } = encrypt(token);
+    const { encToken, iv, authTag, keyVersion } = encrypt(token);
 
-    const newCred = {
+    const newCredential = {
       id: crypto.randomUUID(),
       userId,
       provider: normalizedProvider,
@@ -78,22 +74,23 @@ export default async function credentialRoutes(fastify: FastifyInstance) {
       encToken,
       iv,
       authTag,
+      keyVersion,
       createdAt: new Date(),
     };
 
-    db.insert(credentials).values(newCred).run();
+    await db.insert(credentials).values(newCredential);
     await serviceSyncCoordinator.refreshSchedules();
 
-    return { success: true, id: newCred.id };
+    return { success: true, id: newCredential.id };
   });
 
   fastify.delete("/:id", async (request) => {
     const { id } = request.params as { id: string };
     const userId = ((await requireSession(fastify, request)) as JwtUser).id;
 
-    db.delete(credentials)
-      .where(and(eq(credentials.id, id), eq(credentials.userId, userId)))
-      .run();
+    await db
+      .delete(credentials)
+      .where(and(eq(credentials.id, id), eq(credentials.userId, userId)));
     await serviceSyncCoordinator.refreshSchedules();
 
     return { success: true };

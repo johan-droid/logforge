@@ -11,6 +11,7 @@ type ServiceWithProvider = {
   id: string;
   credentialId: string;
   providerSvcId: string;
+  providerProjectId: string | null;
   provider: string;
   name: string;
   type: string | null;
@@ -25,6 +26,7 @@ async function loadUserServices(userId: string): Promise<ServiceWithProvider[]> 
       id: services.id,
       credentialId: services.credentialId,
       providerSvcId: services.providerSvcId,
+      providerProjectId: services.providerProjectId,
       provider: credentials.provider,
       name: services.name,
       type: services.type,
@@ -34,15 +36,14 @@ async function loadUserServices(userId: string): Promise<ServiceWithProvider[]> 
     })
     .from(services)
     .innerJoin(credentials, eq(services.credentialId, credentials.id))
-    .where(eq(credentials.userId, userId))
-    .all();
+    .where(eq(credentials.userId, userId));
 }
 
 export default async function dataRoutes(fastify: FastifyInstance) {
   fastify.addHook("onRequest", async (request, reply) => {
     try {
       const user = await requireSession(fastify, request);
-      ensureUserRecord(user);
+      await ensureUserRecord(user);
     } catch {
       return reply.status(401).send({ error: "Unauthorized" });
     }
@@ -60,6 +61,7 @@ export default async function dataRoutes(fastify: FastifyInstance) {
       id: service.id,
       credentialId: service.credentialId,
       providerSvcId: service.providerSvcId,
+      providerProjectId: service.providerProjectId,
       provider: service.provider,
       name: service.name,
       type: service.type,
@@ -77,20 +79,19 @@ export default async function dataRoutes(fastify: FastifyInstance) {
     }
 
     const { svcId } = request.params as { svcId: string };
-
-    const serviceRecord = db
+    const serviceRows = await db
       .select({ id: services.id })
       .from(services)
       .innerJoin(credentials, eq(services.credentialId, credentials.id))
-      .where(and(eq(services.id, svcId), eq(credentials.userId, user.id)))
-      .get();
+      .where(and(eq(services.id, svcId), eq(credentials.userId, user.id)));
+    const serviceRecord = serviceRows[0];
 
     if (!serviceRecord) {
       reply.status(404).send({ error: "Service not found" });
       return;
     }
 
-    const branchRows = db
+    const branchRows = await db
       .select({
         id: branches.id,
         serviceId: branches.serviceId,
@@ -101,33 +102,28 @@ export default async function dataRoutes(fastify: FastifyInstance) {
         updatedAt: branches.updatedAt,
       })
       .from(branches)
-      .where(eq(branches.serviceId, svcId))
-      .all();
+      .where(eq(branches.serviceId, svcId));
 
-    return {
-      serviceId: svcId,
-      branches: branchRows,
-    };
+    return { serviceId: svcId, branches: branchRows };
   });
 
-  fastify.get("/rate-limits", async (_request, reply) => {
-    const user = await requireSession(fastify, _request).catch(() => undefined);
+  fastify.get("/rate-limits", async (request, reply) => {
+    const user = await requireSession(fastify, request).catch(() => undefined);
     if (!user) {
       reply.status(401).send({ error: "Unauthorized" });
       return;
     }
 
-    const connectedProviderRows = db
+    const connectedProviderRows = await db
       .select({ provider: credentials.provider })
       .from(credentials)
-      .where(eq(credentials.userId, user.id))
-      .all();
+      .where(eq(credentials.userId, user.id));
     const connectedProviders = new Set(
       connectedProviderRows.map((row) => row.provider),
     );
 
     const providers = Object.keys(RATE_LIMITS);
-    const budgets = await Promise.all(
+    return Promise.all(
       providers.map(async (provider) => {
         const budget = await budgetManager.getBudget(provider);
         return {
@@ -140,7 +136,5 @@ export default async function dataRoutes(fastify: FastifyInstance) {
         };
       }),
     );
-
-    return budgets;
   });
 }

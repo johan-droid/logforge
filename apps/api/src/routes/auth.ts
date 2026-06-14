@@ -44,7 +44,13 @@ export default async function authRoutes(fastify: FastifyInstance) {
       return;
     }
 
-    const encryptionKey = process.env.ENCRYPTION_KEY || "12345678901234567890123456789012";
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      reply.status(500).send({
+        error: "Server misconfigured: ENCRYPTION_KEY not set",
+      });
+      return;
+    }
     const userId = user.id || user.sub;
     if (!userId) {
       reply.status(400).send({ error: "Invalid user session" });
@@ -128,7 +134,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       const accessToken = tokenJson.access_token as string | undefined;
 
       if (!accessToken) {
-        fastify.log.error("No access token from Google", tokenJson);
+        fastify.log.error("Google access grant missing", tokenJson);
         reply.status(500).send({ error: "Failed to obtain access token" });
         return;
       }
@@ -147,7 +153,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         return;
       }
 
-      ensureUserRecord({
+      await ensureUserRecord({
         id: user.sub,
         email: user.email,
         name: user.name,

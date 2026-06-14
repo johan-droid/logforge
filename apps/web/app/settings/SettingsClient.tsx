@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Cloud,
-  ExternalLink,
   KeyRound,
   RefreshCcw,
   ShieldCheck,
@@ -32,7 +31,12 @@ type ProviderCard = {
 type ProviderAppsResponse = {
   provider: string;
   connected: boolean;
-  apps: Array<{ id: string; name: string; provider: string }>;
+  apps: Array<{
+    id: string;
+    name: string;
+    provider: string;
+    type?: "pages" | "worker";
+  }>;
 };
 
 type SettingsClientProps = {
@@ -106,10 +110,7 @@ export function SettingsClient({ initialProvider }: SettingsClientProps) {
     load();
   }, [load]);
 
-  const providerList = useMemo(
-    () => providers.filter((provider) => provider.key !== "railway"),
-    [providers],
-  );
+  const providerList = useMemo(() => providers, [providers]);
   const selectedLabel = useMemo(
     () =>
       providerList.find((provider) => provider.key === selectedProvider)
@@ -320,18 +321,6 @@ export function SettingsClient({ initialProvider }: SettingsClientProps) {
                     <ShieldCheck className="h-4 w-4" />
                     {saving ? "Validating..." : "Validate and save"}
                   </Button>
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="border-white/10 bg-white/5"
-                  >
-                    <a
-                      href={`${API_BASE}/api/providers/${selectedProvider}/auth`}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      OAuth connect
-                    </a>
-                  </Button>
                 </div>
               </form>
             </CardContent>
@@ -366,7 +355,7 @@ export function SettingsClient({ initialProvider }: SettingsClientProps) {
                           {app.name}
                         </div>
                         <div className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">
-                          {app.provider}
+                          {app.type ? `${app.provider} · ${app.type}` : app.provider}
                         </div>
                       </div>
                       <CheckCircle2 className="h-4 w-4 text-emerald-300" />
@@ -375,8 +364,8 @@ export function SettingsClient({ initialProvider }: SettingsClientProps) {
                 </div>
               ) : (
                 <div className="p-8 text-sm text-muted-foreground">
-                  No services discovered yet. Add a valid token or complete
-                  OAuth for this provider.
+                  No services discovered yet. Add a valid Personal Access Token
+                  for this provider.
                 </div>
               )}
             </CardContent>

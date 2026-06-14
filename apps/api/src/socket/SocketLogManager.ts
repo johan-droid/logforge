@@ -1,10 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import type { Server } from "socket.io";
 import type { LogEvent } from "@repo/shared/types";
+import { createAdapter } from "@socket.io/redis-adapter";
 import type { SessionUser } from "../auth/session.js";
 import { EventBus } from "../sse/EventBus.js";
 import { getSessionTokenFromHeaders } from "../auth/session.js";
 import { normalizeProvider } from "../providers/registry.js";
+import { createRedisClient } from "../redis.js";
 
 type SubscribePayload = {
   provider: string;
@@ -20,6 +22,10 @@ export class SocketLogManager {
     private readonly io: Server,
     private readonly fastify: FastifyInstance,
   ) {
+    const pubClient = createRedisClient();
+    const subClient = pubClient.duplicate();
+    this.io.adapter(createAdapter(pubClient, subClient));
+
     this.io.use(async (socket, next) => {
       try {
         const token = getSessionTokenFromHeaders(socket.request.headers);

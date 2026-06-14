@@ -1,12 +1,12 @@
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { FastifyInstance } from "fastify";
-import { normalizeProvider } from "../providers/registry.js";
 import { listProviderApps, validateProviderToken } from "../providers/providerApps.js";
+import { normalizeProvider } from "../providers/registry.js";
 import { streamPollerManager } from "../polling/StreamPollerManager.js";
+import { createRedisClient } from "../redis.js";
 import { sseManager } from "../sse/SSEManager.js";
 
-// Ephemeral memory map for short-lived streaming tickets (expires in 10s)
-const valveTickets = new Map<string, { provider: string; token: string; serviceId: string }>();
+const redis = createRedisClient();
 
 type TicketBody = {
   provider: string;
@@ -20,7 +20,6 @@ type AppsBody = {
 };
 
 export default async function valveRoutes(fastify: FastifyInstance) {
-  // 1. Fetch apps dynamically for a provider using the raw token (stateless)
   fastify.post("/apps", async (request, reply) => {
     const { provider, token } = request.body as AppsBody;
     const normalized = normalizeProvider(provider);
@@ -37,13 +36,12 @@ export default async function valveRoutes(fastify: FastifyInstance) {
     try {
       const apps = await listProviderApps(normalized, token);
       return { provider: normalized, apps };
-    } catch (err) {
-      fastify.log.error(err);
+    } catch (error) {
+      fastify.log.error(error);
       reply.status(500).send({ error: "Failed to list provider apps" });
     }
   });
 
-  // 2. Create an ephemeral, short-lived single-use streaming ticket
   fastify.post("/ticket", async (request, reply) => {
     const { provider, token, serviceId } = request.body as TicketBody;
     const normalized = normalizeProvider(provider);
@@ -57,7 +55,6 @@ export default async function valveRoutes(fastify: FastifyInstance) {
       return;
     }
 
-    // Validate token first
     const isValid = await validateProviderToken(normalized, token);
     if (!isValid) {
       reply.status(400).send({ error: "Token validation failed" });
@@ -65,65 +62,87 @@ export default async function valveRoutes(fastify: FastifyInstance) {
     }
 
     const ticketId = crypto.randomUUID();
-    valveTickets.set(ticketId, { provider: normalized, token, serviceId });
-
-    // Expire ticket in 10 seconds
-    setTimeout(() => {
-      valveTickets.delete(ticketId);
-    }, 10000);
+    await redis.set(
+      `valve-ticket:${ticketId}`,
+      JSON.stringify({ provider: normalized, token, serviceId }),
+      "EX",
+      10,
+    );
 
     return { ticketId };
   });
 
-  // 3. Ephemeral Server-Sent Events stream using the single-use ticket
-  fastify.get("/stream", async (request, reply) => {
-    const { ticket, type } = request.query as { ticket?: string; type?: string };
-    const logType = type === "build" ? "build" : "app";
+  fastify.get(
+    "/stream",
+    { config: { rateLimit: false } },
+    async (request, reply) => {
+      const { ticket, type } = request.query as { ticket?: string; type?: string };
+      const logType = type === "build" ? "build" : "app";
 
-    if (!ticket || !valveTickets.has(ticket)) {
-      reply.status(401).send({ error: "Invalid or expired ticket" });
-      return;
-    }
-
-    const ticketData = valveTickets.get(ticket)!;
-    valveTickets.delete(ticket); // Single-use consumption
-
-    const { provider, token, serviceId } = ticketData;
-
-    // Set up SSE headers
-    reply.raw.setHeader("Content-Type", "text/event-stream");
-    reply.raw.setHeader("Cache-Control", "no-cache");
-    reply.raw.setHeader("Connection", "keep-alive");
-    reply.raw.setHeader("X-Accel-Buffering", "no");
-    reply.raw.flushHeaders();
-
-    // Add to sseManager using a special valve client identifier
-    sseManager.addClient("valve-client", provider, serviceId, logType, reply);
-
-    // Start polling in-memory for all discovered apps of this provider
-    let polledServiceIds: string[] = [];
-    try {
-      const apps = await listProviderApps(provider, token);
-      polledServiceIds = apps.map((app) => app.id);
-    } catch {
-      // Fallback to just the requested service
-    }
-    if (!polledServiceIds.includes(serviceId)) {
-      polledServiceIds.push(serviceId);
-    }
-
-    for (const svcId of polledServiceIds) {
-      streamPollerManager.startPoller(provider, svcId, logType, token);
-    }
-
-    // Clean up when the client disconnects
-    reply.raw.on("close", () => {
-      for (const svcId of polledServiceIds) {
-        streamPollerManager.stopPoller(provider, svcId, logType, token);
+      if (!ticket) {
+        reply.status(401).send({ error: "Invalid or expired ticket" });
+        return;
       }
-    });
 
-    // Keep connection open
-    return new Promise(() => {});
-  });
+      const rawTicket = await redis.getdel(`valve-ticket:${ticket}`);
+      if (!rawTicket) {
+        reply.status(401).send({ error: "Invalid or expired ticket" });
+        return;
+      }
+
+      const ticketData = JSON.parse(rawTicket) as {
+        provider: string;
+        token: string;
+        serviceId: string;
+      };
+      const { provider, token, serviceId } = ticketData;
+
+      reply.hijack();
+      reply.raw.setHeader("Content-Type", "text/event-stream");
+      reply.raw.setHeader("Cache-Control", "no-cache");
+      reply.raw.setHeader("Connection", "keep-alive");
+      reply.raw.setHeader("X-Accel-Buffering", "no");
+      reply.raw.flushHeaders();
+
+      sseManager.addClient("valve-client", provider, serviceId, logType, reply);
+
+      let polledServices: Array<{
+        id: string;
+        type?: "pages" | "worker";
+        projectId?: string;
+      }> = [];
+      try {
+        const apps = await listProviderApps(provider, token);
+        polledServices = apps.map((app) => ({
+          id: app.id,
+          type: app.type,
+          projectId: app.projectId,
+        }));
+      } catch {
+        // DECISION(jules): fall back to the explicit request so the stream still opens.
+      }
+
+      if (!polledServices.some((service) => service.id === serviceId)) {
+        polledServices.push({ id: serviceId, type: "pages" });
+      }
+
+      for (const service of polledServices) {
+        await streamPollerManager.startPoller(provider, service.id, logType, token, {
+          serviceType: service.type ?? "pages",
+          providerProjectId: service.projectId ?? null,
+        });
+      }
+
+      reply.raw.on("close", () => {
+        for (const service of polledServices) {
+          streamPollerManager.stopPoller(provider, service.id, logType, token, {
+            serviceType: service.type ?? "pages",
+            providerProjectId: service.projectId ?? null,
+          });
+        }
+      });
+
+      return;
+    },
+  );
 }

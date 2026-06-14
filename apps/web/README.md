@@ -22,7 +22,7 @@ The web app reads [apps/web/.env.example](/D:/Logforge/apps/web/.env.example:1).
 
 - `/`: landing page and Google sign-in entry
 - `/dashboard`: connected services and log viewer
-- `/settings`: provider credential and OAuth connection screen
+- `/settings`: provider credential and PAT connection screen
 - `/account`: authenticated user menu with session actions
 - `/auth/callback`: fallback redirect page to `/dashboard` (session is cookie-based)
 

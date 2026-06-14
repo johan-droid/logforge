@@ -8,32 +8,29 @@ function fallbackEmail(userId: string) {
   return `${safeId || "user"}@local.logforge`;
 }
 
-export function ensureUserRecord(user: SessionUser) {
+export async function ensureUserRecord(user: SessionUser) {
   if (!user.id) {
     throw new Error("Session user id is required");
   }
 
-  const existing = db
+  const existingRows = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.id, user.id))
-    .get();
-
+    .where(eq(users.id, user.id));
+  const existing = existingRows[0];
   const email = user.email?.trim();
 
   if (existing) {
     if (email) {
-      db.update(users).set({ email }).where(eq(users.id, user.id)).run();
+      await db.update(users).set({ email }).where(eq(users.id, user.id));
     }
     return;
   }
 
-  db.insert(users)
-    .values({
-      id: user.id,
-      email: email || fallbackEmail(user.id),
-      passwordHash: `session:${user.id}`,
-      createdAt: new Date(),
-    })
-    .run();
+  await db.insert(users).values({
+    id: user.id,
+    email: email || fallbackEmail(user.id),
+    passwordHash: `session:${user.id}`,
+    createdAt: new Date(),
+  });
 }

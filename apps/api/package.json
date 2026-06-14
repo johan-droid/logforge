@@ -7,22 +7,30 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "eslint \"src/**/*.ts\""
+    "worker": "tsx src/worker.ts",
+    "lint": "eslint \"src/**/*.ts\"",
+    "check-types": "tsc --noEmit",
+    "test": "tsx --test src/**/*.test.ts",
+    "rotate-key": "tsx scripts/rotate-encryption-key.ts",
+    "migrate:sqlite": "tsx scripts/migrate-sqlite-to-postgres.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
     "@fastify/jwt": "^10.1.0",
     "@fastify/rate-limit": "^10.3.0",
     "@repo/shared": "workspace:*",
+    "@socket.io/redis-adapter": "^8.3.0",
     "axios": "^1.7.2",
-    "better-sqlite3": "^10.0.0",
+    "bullmq": "^5.58.5",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.8.5",
+    "ioredis": "^5.8.2",
     "node-cron": "^4.2.1",
     "p-queue": "^8.0.1",
     "pg": "^8.12.0",
     "pino": "^9.1.0",
     "socket.io": "^4.8.1",
+    "ws": "^8.18.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -32,7 +40,11 @@
     "@types/node": "^20.14.2",
     "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.11.6",
+    "@types/ws": "^8.18.1",
+    "better-sqlite3": "^10.0.0",
     "drizzle-kit": "^0.21.2",
+    "ioredis-mock": "^8.13.1",
+    "pg-mem": "^3.0.5",
     "tsx": "^4.15.1",
     "typescript": "^5.4.5"
   }
